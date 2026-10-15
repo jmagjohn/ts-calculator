@@ -4,16 +4,35 @@ A scientific calculator written **entirely in TypeScript**, built on
 [mathjs](https://mathjs.org/), packaged with Vite, and deployed as static
 (serverless) hosting on Vercel.
 
+- **Live:** https://ts-calculator-sigma.vercel.app
+- **Source:** https://github.com/jmagjohn/ts-calculator
+
+## Install on your phone (PWA)
+
+This is an installable PWA: it runs full-screen with no browser chrome and
+works offline after the first visit.
+
+- **Android / Chrome:** open the live URL, open the menu, choose
+  **"Install app" / "Add to Home screen"**.
+- **iOS / Safari:** open the live URL, tap **Share**, then
+  **"Add to Home Screen"**.
+
+The service worker (`public/sw.js`) caches the app shell. Navigations are
+network-first, so a new deploy is picked up on the next online load.
+
 ## Status
 
 **v1 — Scientific engine.** Functions, constants, degree/radian modes, live
 preview, and a clickable history tape.
 
+Shipped:
+- **v1** — Scientific engine
+- **PWA** — installable + offline (manifest + service worker)
+
 Planned:
 - **v2** — Calculus (numeric derivative/integral, then symbolic via `nerdamer`)
 - **v3** — 2D plots (cartesian, polar, parametric)
 - **v4** — 3D surfaces (`three.js`)
-- **v5** — PWA: offline + installable
 
 ## Features (v1)
 
@@ -28,6 +47,7 @@ Planned:
 - Live result preview, float-noise trimming (`0.1 + 0.2` shows `0.3`)
 - Sane notation: `100000` stays `100000` (no `1e+5` until ~1e21)
 - Clickable history tape
+- Installable PWA with offline support
 - Retro-brutalist CRT UI (9 themes, scanline/motion toggles) — via the
   `retro-brutalist-ui` skill's drop-in stylesheet
 
@@ -58,6 +78,9 @@ vercel --prod    # production deployment
 
 Vercel auto-detects Vite; `vercel.json` pins the build command and output
 directory. The result is a static site served from Vercel's edge CDN.
+
+The project is already connected to the GitHub repo, so pushing to `main`
+triggers a production deploy automatically.
 
 ## Project layout
 
