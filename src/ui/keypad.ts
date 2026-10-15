@@ -1,40 +1,38 @@
 /**
- * Declarative keypad definition. The layout is data, not markup, so the DOM
- * builder and the styling stay dumb. `insert` keys append literal text;
- * `action` keys run a named command wired up in the controller.
+ * Declarative keypad. The editor is a MathLive math-field, so a key does one
+ * of three things: insert LaTeX (including structural templates like
+ * \frac{}{} that create slots you can type into), run a MathLive navigation
+ * command (move/delete through the structure), or run an app action.
  */
 
-export type KeyVariant = "sci" | "op" | "digit" | "equals" | "warn";
+import type { Selector } from "mathlive";
 
-export type KeyAction =
-  | "clear"
-  | "backspace"
-  | "equals"
-  | "negate"
-  | "ans"
-  | "square"
-  | "inverse";
+export type KeyVariant = "sci" | "op" | "digit" | "equals" | "warn" | "nav";
+
+export type AppAction = "clear" | "equals" | "ans";
 
 export type Key =
-  | { kind: "insert"; label: string; text: string; variant?: KeyVariant; hint?: string }
-  | { kind: "action"; label: string; action: KeyAction; variant?: KeyVariant; hint?: string };
+  | { kind: "insert"; label: string; latex: string; variant?: KeyVariant; hint?: string }
+  | { kind: "command"; label: string; command: Selector; variant?: KeyVariant; hint?: string }
+  | { kind: "action"; label: string; action: AppAction; variant?: KeyVariant; hint?: string };
 
-const sci = (label: string, text: string, hint?: string): Key => ({
+const insert = (label: string, latex: string, variant?: KeyVariant, hint?: string): Key => ({
   kind: "insert",
   label,
-  text,
-  variant: "sci",
+  latex,
+  variant,
   hint,
 });
 
-const insert = (label: string, text = label, variant?: KeyVariant): Key => ({
-  kind: "insert",
+const command = (label: string, name: Selector, hint: string): Key => ({
+  kind: "command",
   label,
-  text,
-  variant,
+  command: name,
+  variant: "nav",
+  hint,
 });
 
-const action = (label: string, name: KeyAction, variant?: KeyVariant, hint?: string): Key => ({
+const action = (label: string, name: AppAction, variant?: KeyVariant, hint?: string): Key => ({
   kind: "action",
   label,
   action: name,
@@ -42,55 +40,57 @@ const action = (label: string, name: KeyAction, variant?: KeyVariant, hint?: str
   hint,
 });
 
-/** Five columns wide; rows wrap naturally in the CSS grid. */
+/** Five columns wide; seven rows fill the screen. */
 export const KEYPAD_ROWS: Key[][] = [
   [
-    sci("sin", "sin(", "sine"),
-    sci("cos", "cos(", "cosine"),
-    sci("tan", "tan(", "tangent"),
-    sci("ln", "ln(", "natural log"),
-    sci("log", "log10(", "log base 10"),
+    command("←", "moveToPreviousChar", "move left"),
+    command("→", "moveToNextChar", "move right"),
+    insert("(", "("),
+    insert(")", ")"),
+    command("⌫", "deleteBackward", "delete"),
   ],
   [
-    sci("√", "sqrt(", "square root"),
-    action("x²", "square", "sci", "square"),
-    sci("xʸ", "^", "power"),
-    action("1/x", "inverse", "sci", "reciprocal"),
-    sci("n!", "!", "factorial"),
+    // \placeholder{} (not an empty group) is what makes MathLive focus the slot,
+    // so typing lands inside the numerator/exponent instead of after it.
+    insert("a/b", "\\frac{\\placeholder{}}{\\placeholder{}}", "sci", "fraction"),
+    insert("x^n", "^{\\placeholder{}}", "sci", "exponent"),
+    insert("√", "\\sqrt{\\placeholder{}}", "sci", "square root"),
+    insert("π", "\\pi", "sci", "pi"),
+    insert("e", "e", "sci", "euler's number"),
   ],
   [
-    insert("("),
-    insert(")"),
-    insert("π", "pi", "sci"),
-    insert("e", "e", "sci"),
-    insert("%", "%", "sci"),
+    insert("sin", "\\sin(", "sci", "sine"),
+    insert("cos", "\\cos(", "sci", "cosine"),
+    insert("tan", "\\tan(", "sci", "tangent"),
+    insert("ln", "\\ln(", "sci", "natural log"),
+    insert("log", "\\log(", "sci", "log base 10"),
   ],
   [
-    insert("7"),
-    insert("8"),
-    insert("9"),
-    insert("÷", "/", "op"),
-    action("⌫", "backspace", "warn", "delete"),
-  ],
-  [
-    insert("4"),
-    insert("5"),
-    insert("6"),
-    insert("×", "*", "op"),
+    insert("7", "7"),
+    insert("8", "8"),
+    insert("9", "9"),
+    insert("÷", "/", "op", "divide"),
     action("AC", "clear", "warn", "all clear"),
   ],
   [
-    insert("1"),
-    insert("2"),
-    insert("3"),
-    insert("−", "-", "op"),
-    action("ANS", "ans", "sci", "last answer"),
+    insert("4", "4"),
+    insert("5", "5"),
+    insert("6", "6"),
+    insert("×", "\\times", "op", "multiply"),
+    insert("!", "!", "sci", "factorial"),
   ],
   [
-    action("±", "negate", "sci", "toggle sign"),
-    insert("0"),
-    insert("."),
-    insert("+", "+", "op"),
+    insert("1", "1"),
+    insert("2", "2"),
+    insert("3", "3"),
+    insert("−", "-", "op", "minus"),
+    insert("x²", "^{2}", "sci", "square"),
+  ],
+  [
+    insert("0", "0"),
+    insert(".", "."),
+    action("ANS", "ans", "sci", "last answer"),
+    insert("+", "+", "op", "plus"),
     action("=", "equals", "equals", "evaluate"),
   ],
 ];

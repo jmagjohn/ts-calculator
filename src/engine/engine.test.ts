@@ -1,93 +1,56 @@
 import { describe, expect, it } from "vitest";
-import {
-  evaluateExpression,
-  evaluateNumber,
-  toDisplay,
-  toFraction,
-} from "./engine";
+import { evaluate, toLatex } from "./engine";
 
-describe("evaluateNumber", () => {
-  it("honors operator precedence", () => {
-    expect(evaluateNumber("2 + 3 * 4")).toBe(14);
-    expect(evaluateNumber("(2 + 3) * 4")).toBe(20);
+describe("evaluate", () => {
+  it("parses LaTeX and evaluates arithmetic", () => {
+    expect(evaluate("2+3\\times4").decimal).toBe("14");
+    expect(evaluate("2^{10}").decimal).toBe("1024");
   });
 
-  it("supports powers, roots and factorial", () => {
-    expect(evaluateNumber("2 ^ 10")).toBe(1024);
-    expect(evaluateNumber("sqrt(144)")).toBe(12);
-    expect(evaluateNumber("5!")).toBe(120);
+  it("keeps exact forms instead of collapsing to decimals", () => {
+    expect(evaluate("\\frac{1}{3}").exact).toBe("\\frac{1}{3}");
+    expect(evaluate("\\frac{6}{4}").exact).toBe("\\frac{3}{2}");
+    expect(evaluate("\\sqrt{2}").exact).toBe("\\sqrt{2}");
   });
 
-  it("supports constants and scientific functions", () => {
-    expect(evaluateNumber("pi", "rad")).toBeCloseTo(Math.PI, 10);
-    expect(evaluateNumber("e", "rad")).toBeCloseTo(Math.E, 10);
-    expect(evaluateNumber("ln(e)", "rad")).toBeCloseTo(1, 10);
-    expect(evaluateNumber("log10(1000)", "rad")).toBe(3);
-    expect(evaluateNumber("log2(8)", "rad")).toBe(3);
+  it("still offers a decimal approximation", () => {
+    expect(evaluate("\\frac{1}{3}").decimal).toBe("0.333333333333");
   });
 
-  it("respects degree vs radian mode for trig", () => {
-    expect(evaluateNumber("sin(30)", "deg")).toBeCloseTo(0.5, 10);
-    expect(evaluateNumber("sin(0)", "rad")).toBe(0);
-    expect(evaluateNumber("asin(1)", "deg")).toBeCloseTo(90, 10);
-  });
-
-  it("handles trailing percent and modulo", () => {
-    expect(evaluateNumber("50%")).toBe(0.5);
-    expect(evaluateNumber("10 % 3")).toBe(1);
-  });
-
-  it("reads values from an extra scope (e.g. ANS)", () => {
-    expect(evaluateNumber("ans + 1", "rad", { ans: 41 })).toBe(42);
-  });
-
-  it("rejects malformed input and non-finite results", () => {
-    expect(() => evaluateNumber("")).toThrow(/empty/i);
-    expect(() => evaluateNumber("1 +")).toThrow();
-    expect(() => evaluateNumber("1 / 0")).toThrow(/real number/i);
-  });
-});
-
-describe("toDisplay", () => {
   it("trims floating-point noise", () => {
-    expect(toDisplay(evaluateExpression("0.1 + 0.2"))).toBe("0.3");
+    expect(evaluate("0.1+0.2").decimal).toBe("0.3");
   });
 
-  it("renders integers without a decimal point", () => {
-    expect(toDisplay(evaluateExpression("6 / 3"))).toBe("2");
+  it("respects degree vs radian mode", () => {
+    expect(evaluate("\\sin(30)", "deg").decimal).toBe("0.5");
+    expect(evaluate("\\sin(30)", "rad").exact).toBe("\\sin(30)");
   });
 
-  it("keeps ordinary magnitudes out of exponential notation", () => {
-    expect(toDisplay(100000)).toBe("100000");
-    expect(toDisplay(123459)).toBe("123459");
-    expect(toDisplay(0.0001)).toBe("0.0001");
+  it("strips LaTeX thousands separators", () => {
+    expect(evaluate("100000").exact).toBe("100000");
   });
 
-  it("still uses exponential for extreme magnitudes", () => {
-    expect(toDisplay(1e21)).toBe("1e+21");
+  it("reports symbolic results with no numeric value", () => {
+    const result = evaluate("q+1");
+    expect(result.exact).toBe("q+1");
+    expect(result.value).toBeNull();
+    expect(result.decimal).toBeNull();
   });
 
-  it("throws on non-finite numbers", () => {
-    expect(() => toDisplay(Infinity)).toThrow(/finite/i);
+  it("rejects empty and malformed input", () => {
+    expect(() => evaluate("")).toThrow(/empty/i);
+    expect(() => evaluate("1+")).toThrow(/invalid/i);
   });
 });
 
-describe("toFraction", () => {
-  it("renders simple fractions exactly", () => {
-    expect(toFraction(1 / 3)).toBe("1/3");
-    expect(toFraction(0.5)).toBe("1/2");
-    expect(toFraction(1.25)).toBe("5/4");
-    expect(toFraction(-0.75)).toBe("-3/4");
-    expect(toFraction(0.1)).toBe("1/10");
+describe("toLatex", () => {
+  it("picks exact or decimal by preference", () => {
+    const result = evaluate("\\frac{1}{3}");
+    expect(toLatex(result, "exact")).toBe("\\frac{1}{3}");
+    expect(toLatex(result, "decimal")).toBe("0.333333333333");
   });
 
-  it("refuses integers and irrationals", () => {
-    expect(toFraction(2)).toBeNull();
-    expect(toFraction(Math.PI)).toBeNull();
-    expect(toFraction(Number.NaN)).toBeNull();
-  });
-
-  it("refuses non-number results", () => {
-    expect(toFraction({ type: "Complex" })).toBeNull();
+  it("falls back to the exact form when no finite value exists", () => {
+    expect(toLatex(evaluate("q+1"), "decimal")).toBe("q+1");
   });
 });

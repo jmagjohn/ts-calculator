@@ -1,29 +1,24 @@
 /**
  * Calculator controller.
  *
- * The expression lives in a real <input>, so editing (caret placement, click
- * to cursor, arrows, Home/End, drag-select, Ctrl+A, native backspace/delete)
- * is the platform's job — not ours. We only: mirror the input into a live
- * result preview, insert text at the caret from the keypad, and run the engine.
+ * The expression is a MathLive math-field (a Word-style structural editor:
+ * fractions, exponents and roots create slots you can cursor into). We mirror
+ * committed results into a read-only math-field, keep a history tape, and wire
+ * the keypad, the drawer, and the options.
+ *
+ * Nothing is evaluated until `=` is pressed.
  */
 
-import {
-  evaluateExpression,
-  toDisplay,
-  toFraction,
-  type AngleMode,
-} from "../engine/engine";
-import { KEYPAD_ROWS, type Key, type KeyAction } from "./keypad";
-
-type ResultFormat = "decimal" | "fraction";
+import { MathfieldElement, type Selector } from "mathlive";
+import { evaluate, toLatex, type AngleMode, type ResultFormat } from "../engine/engine";
+import { KEYPAD_ROWS, type Key } from "./keypad";
 
 interface HistoryEntry {
-  expression: string;
+  latex: string;
   result: string;
 }
 
-const MAX_EXPRESSION = 240;
-const MAX_HISTORY = 24;
+const MAX_HISTORY = 12;
 
 function must<T extends Element>(id: string): T {
   const element = document.getElementById(id);
@@ -55,205 +50,109 @@ function segmentedGroup(attribute: string) {
   };
 }
 
+/** A read-only math-field that renders LaTeX, for results and history rows. */
+function renderMath(latex: string, className: string): MathfieldElement {
+  const field = document.createElement("math-field") as MathfieldElement;
+  field.setAttribute("read-only", "");
+  field.className = className;
+  field.value = latex;
+  return field;
+}
+
 export function mountCalculator(): void {
-  const expressionInput = must<HTMLInputElement>("calc-expression");
-  const resultEl = must<HTMLElement>("calc-result");
+  const input = must<MathfieldElement>("calc-input");
+  const resultField = must<MathfieldElement>("calc-result");
   const keypadEl = must<HTMLDivElement>("keypad");
   const historyEl = must<HTMLUListElement>("history");
   const clearHistoryButton = must<HTMLButtonElement>("clear-history");
-  const statusAngleEl = must<HTMLElement>("status-angle");
-  const statusFormatEl = must<HTMLElement>("status-format");
   const announcerEl = must<HTMLElement>("calc-announcer");
+  const drawer = must<HTMLDialogElement>("drawer");
+  const menuToggle = must<HTMLButtonElement>("menu-toggle");
+  const drawerClose = must<HTMLButtonElement>("drawer-close");
 
   const angleGroup = segmentedGroup("angle");
   const formatGroup = segmentedGroup("format");
 
   let angleMode: AngleMode = "rad";
-  let resultFormat: ResultFormat = "decimal";
+  let resultFormat: ResultFormat = "exact";
   let lastAnswer: number | null = null;
-  let errorMessage: string | null = null;
   const history: HistoryEntry[] = [];
 
-  const expression = (): string => expressionInput.value;
-  const extraScope = (): Record<string, unknown> =>
-    lastAnswer === null ? {} : { ans: lastAnswer };
+  const focusInput = (): void => input.focus();
 
-  function focusExpression(): void {
-    expressionInput.focus();
-  }
-
-  function setCaret(index: number): void {
-    const clamped = Math.max(0, Math.min(index, expressionInput.value.length));
-    expressionInput.setSelectionRange(clamped, clamped);
-  }
-
-  /** Announce committed results/errors to assistive tech (not the live preview). */
   function announce(message: string): void {
     announcerEl.textContent = message;
   }
 
-  function formatResult(value: unknown): string {
-    if (resultFormat === "fraction") {
-      const fraction = toFraction(value);
-      if (fraction !== null) {
-        return fraction;
-      }
-    }
-    return toDisplay(value);
-  }
-
   // -- rendering -----------------------------------------------------------
-
-  function renderDisplay(): void {
-    resultEl.classList.remove("display__result--error");
-
-    if (errorMessage) {
-      resultEl.textContent = "ERROR";
-      resultEl.title = errorMessage;
-      resultEl.classList.add("display__result--error");
-      return;
-    }
-
-    resultEl.title = "";
-    if (expression().trim() === "") {
-      resultEl.textContent = "0";
-      return;
-    }
-
-    try {
-      resultEl.textContent = formatResult(
-        evaluateExpression(expression(), angleMode, extraScope()),
-      );
-    } catch {
-      resultEl.textContent = ""; // mid-typing; not worth shouting about
-    }
-  }
-
-  function renderControls(): void {
-    angleGroup.render(angleMode);
-    formatGroup.render(resultFormat);
-    statusAngleEl.textContent = angleMode.toUpperCase();
-    statusFormatEl.textContent = resultFormat === "fraction" ? "FRAC" : "DEC";
-  }
 
   function renderHistory(): void {
     historyEl.replaceChildren(
       ...history.map((entry) => {
         const item = document.createElement("li");
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "history__item";
-        button.title = "Load this expression";
-        button.innerHTML =
-          `<span class="history__expr">${escapeHtml(entry.expression)}</span>` +
-          `<span class="history__result">${escapeHtml(entry.result)}</span>`;
-        button.addEventListener("click", () => {
-          replaceExpression(entry.expression, entry.expression.length);
+        item.className = "history__item";
+        item.tabIndex = 0;
+        item.setAttribute("role", "button");
+        item.title = "Load this expression";
+        item.append(renderMath(`${entry.latex}=${entry.result}`, "history__math"));
+
+        const load = (): void => {
+          input.value = entry.latex;
+          focusInput();
+          drawer.close();
+        };
+        item.addEventListener("click", load);
+        item.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            load();
+          }
         });
-        item.append(button);
         return item;
       }),
     );
     clearHistoryButton.disabled = history.length === 0;
   }
 
-  // -- state mutations -----------------------------------------------------
-
-  /** Replace the whole expression (clamped) and park the caret, then repaint. */
-  function replaceExpression(next: string, caret: number): void {
-    expressionInput.value = next.slice(0, MAX_EXPRESSION);
-    errorMessage = null;
-    focusExpression();
-    setCaret(caret);
-    renderDisplay();
-  }
-
-  /** Insert text at the caret (keypad path), replacing any selection. */
-  function insert(text: string): void {
-    const start = expressionInput.selectionStart ?? expressionInput.value.length;
-    const end = expressionInput.selectionEnd ?? start;
-    const value = expressionInput.value;
-    const merged = (value.slice(0, start) + text + value.slice(end)).slice(0, MAX_EXPRESSION);
-    replaceExpression(merged, Math.min(start + text.length, merged.length));
-  }
-
-  function clear(): void {
-    replaceExpression("", 0);
-  }
-
-  function backspace(): void {
-    const value = expressionInput.value;
-    const start = expressionInput.selectionStart ?? value.length;
-    const end = expressionInput.selectionEnd ?? start;
-    if (start === end) {
-      if (start === 0) {
-        return;
-      }
-      replaceExpression(value.slice(0, start - 1) + value.slice(start), start - 1);
-    } else {
-      replaceExpression(value.slice(0, start) + value.slice(end), start);
-    }
-  }
-
-  function negate(): void {
-    const value = expression();
-    const caret = expressionInput.selectionStart ?? value.length;
-    if (value.startsWith("-")) {
-      replaceExpression(value.slice(1), Math.max(0, caret - 1));
-    } else {
-      replaceExpression(`-${value}`, caret + 1);
-    }
-  }
+  // -- behaviour -----------------------------------------------------------
 
   function equation(): void {
-    const current = expression();
-    if (current.trim() === "") {
+    const latex = input.value;
+    if (latex.trim() === "") {
       return;
     }
+
     try {
-      const value = evaluateExpression(current, angleMode, extraScope());
-      const display = formatResult(value);
-      if (typeof value === "number" && Number.isFinite(value)) {
-        lastAnswer = value;
+      const evaluation = evaluate(latex, angleMode);
+      const shown = toLatex(evaluation, resultFormat);
+      resultField.value = shown;
+      if (evaluation.value !== null) {
+        lastAnswer = evaluation.value;
       }
-      history.unshift({ expression: current, result: display });
+      history.unshift({ latex, result: shown });
       history.splice(MAX_HISTORY);
-      replaceExpression(display, display.length);
-      announce(`Result ${display}`);
-    } catch (error) {
-      errorMessage = error instanceof Error ? error.message : "Unknown error";
-      announce(`Error: ${errorMessage}`);
-      renderDisplay();
+      announce(`Result ${evaluation.decimal ?? "shown"}`);
+    } catch {
+      resultField.value = "\\text{Error}";
+      announce("Error");
     }
     renderHistory();
+    focusInput();
   }
 
-  function runAction(name: KeyAction): void {
-    switch (name) {
-      case "clear":
-        return clear();
-      case "backspace":
-        return backspace();
-      case "equals":
-        return equation();
-      case "negate":
-        return negate();
-      case "ans":
-        return insert(lastAnswer === null ? "0" : String(lastAnswer));
-      case "square": {
-        const value = expression();
-        const next = value.trim() ? `(${value})^2` : "^2";
-        return replaceExpression(next, next.length);
-      }
-      case "inverse": {
-        const value = expression();
-        const next = value.trim() ? `1/(${value})` : "1/";
-        return replaceExpression(next, next.length);
+  function runAction(name: string): void {
+    if (name === "clear") {
+      input.value = "";
+      resultField.value = "";
+      focusInput();
+    } else if (name === "equals") {
+      equation();
+    } else if (name === "ans") {
+      if (lastAnswer !== null) {
+        input.insert(String(lastAnswer));
       }
     }
   }
-
-  // -- keypad + events -----------------------------------------------------
 
   function createKeyButton(key: Key): HTMLButtonElement {
     const button = document.createElement("button");
@@ -265,7 +164,9 @@ export function mountCalculator(): void {
     button.textContent = key.label;
     button.setAttribute("aria-label", key.hint ?? key.label);
     if (key.kind === "insert") {
-      button.dataset.insert = key.text;
+      button.dataset.insert = key.latex;
+    } else if (key.kind === "command") {
+      button.dataset.command = key.command;
     } else {
       button.dataset.action = key.action;
     }
@@ -276,29 +177,35 @@ export function mountCalculator(): void {
     keypadEl.replaceChildren(...KEYPAD_ROWS.flat().map((key) => createKeyButton(key)));
   }
 
+  // -- events --------------------------------------------------------------
+
   keypadEl.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.key");
     if (!button) {
       return;
     }
-    const { insert: text, action } = button.dataset;
-    if (text !== undefined) {
-      insert(text);
-    } else if (action) {
-      runAction(action as KeyAction);
+    const { insert: latex, command: name, action: actionName } = button.dataset;
+    if (latex !== undefined) {
+      focusInput();
+      input.insert(latex);
+    } else if (name !== undefined) {
+      focusInput();
+      input.executeCommand(name as Selector);
+    } else if (actionName !== undefined) {
+      runAction(actionName);
     }
   });
 
   angleGroup.onSelect((value) => {
     angleMode = value as AngleMode;
-    renderControls();
-    renderDisplay();
+    angleGroup.render(angleMode);
+    focusInput();
   });
 
   formatGroup.onSelect((value) => {
     resultFormat = value as ResultFormat;
-    renderControls();
-    renderDisplay();
+    formatGroup.render(resultFormat);
+    focusInput();
   });
 
   clearHistoryButton.addEventListener("click", () => {
@@ -306,26 +213,29 @@ export function mountCalculator(): void {
     renderHistory();
   });
 
-  // Typing and cursor movement are native; we only intercept the two commit keys.
-  expressionInput.addEventListener("input", () => {
-    errorMessage = null;
-    renderDisplay();
-  });
-
-  expressionInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === "=") {
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
       equation();
-      event.preventDefault();
-    } else if (event.key === "Escape") {
-      clear();
-      event.preventDefault();
     }
   });
 
-  // Clicking our own buttons must not steal focus from the input, or the caret dies.
+  menuToggle.addEventListener("click", () => {
+    menuToggle.setAttribute("aria-expanded", "true");
+    drawer.showModal();
+  });
+
+  drawerClose.addEventListener("click", () => drawer.close());
+
+  drawer.addEventListener("close", () => {
+    menuToggle.setAttribute("aria-expanded", "false");
+    focusInput();
+  });
+
+  // Clicking our own buttons must not blur the math-field, or the caret is lost.
   document.addEventListener("mousedown", (event) => {
     const target = event.target as HTMLElement | null;
-    if (target?.closest(".keypad, .seg, #clear-history")) {
+    if (target?.closest(".keypad, .seg, .history__item, #clear-history")) {
       event.preventDefault();
     }
   });
@@ -333,19 +243,19 @@ export function mountCalculator(): void {
   // Clicking dead space reclaims focus so typing keeps working.
   document.addEventListener("pointerdown", (event) => {
     const target = event.target as HTMLElement | null;
-    if (target?.closest("input, select, textarea, button, label")) {
+    if (target?.closest("math-field, select, textarea, button, label, dialog")) {
       return;
     }
-    focusExpression();
+    focusInput();
   });
 
   buildKeypad();
-  renderControls();
+  angleGroup.render(angleMode);
+  formatGroup.render(resultFormat);
   renderHistory();
-  renderDisplay();
-  focusExpression();
-}
 
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Desktop convenience; on touch devices we keep the OS keyboard away.
+  if (!window.matchMedia("(pointer: coarse)").matches) {
+    focusInput();
+  }
 }

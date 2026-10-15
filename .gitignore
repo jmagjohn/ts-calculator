@@ -3,3 +3,6 @@ dist
 .vercel
 *.local
 .DS_Store
+
+# Vendored at dev/build time by scripts/copy-mathlive-assets.mjs
+public/mathlive

@@ -1,142 +1,122 @@
-/* App layout layered on top of the retro-brutalist sheet (retro.css). */
+/* App layout on top of retro.css: one locked, non-scrolling screen. */
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 22px;
-  align-items: center;
-  margin-bottom: 22px;
+html,
+body {
+  height: 100%;
 }
 
-.toolbar__group {
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
   display: flex;
-  align-items: center;
+}
+
+.calc {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+    calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
 }
 
-.toolbar__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--dim);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
+/* ---------- menu button ---------- */
 
-/* Segmented angle toggle */
-.seg {
-  display: inline-flex;
-  border: var(--edge, 2px) solid var(--line);
-}
-
-.seg button {
-  border: 0;
+.menu-toggle {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 20;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 0;
+  background: var(--panel-2);
+  border: 2px solid var(--line);
   box-shadow: none;
-  background: transparent;
-  color: var(--dim);
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
   cursor: pointer;
 }
 
-.seg button:hover {
-  background: var(--panel-2);
-  color: var(--ink);
-}
-
-.seg button.is-active,
-.seg button.is-active:hover {
+.menu-toggle span {
+  display: block;
+  width: 22px;
+  height: 2px;
   background: var(--green);
-  color: var(--on-accent);
 }
 
-.calc-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 26px;
+.menu-toggle:hover span {
+  background: var(--amber);
 }
 
-@media (min-width: 960px) {
-  .calc-layout {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-    align-items: start;
-  }
-}
+/* ---------- display ---------- */
 
-/* Display */
 .display {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 62px 8px 14px;
   background: var(--bg);
-  border: var(--edge, 2px) solid var(--line);
-  padding: 16px 18px;
+  border: 2px solid var(--line);
 }
 
-.display__expression {
+.display__input,
+.display__result {
   display: block;
   width: 100%;
-  min-height: 1.5em;
   padding: 0;
-  margin: 0;
   background: transparent;
   border: 0;
+  --caret-color: var(--green);
+  --selection-background-color: var(--magenta);
+}
+
+.display__input {
+  font-size: clamp(1.05rem, 4.5vw, 1.5rem);
   color: var(--ink);
-  font: inherit;
-  font-size: 1rem;
-  letter-spacing: 0.02em;
-  caret-color: var(--green);
-  word-break: break-all;
-}
-
-.display__expression::placeholder {
-  color: var(--dim);
-  opacity: 0.7;
-}
-
-/* The display panel is already framed; keep the themed focus ring but no UA outline. */
-.display__expression:focus {
-  outline: none;
-}
-
-.display__expression:focus-visible {
-  outline: 3px solid var(--amber);
-  outline-offset: 3px;
 }
 
 .display__result {
-  display: block;
-  margin-top: 6px;
-  text-align: right;
-  font-size: clamp(1.6rem, 6vw, 2.4rem);
-  font-weight: 700;
+  font-size: clamp(1.35rem, 7vw, 2.2rem);
   color: var(--green);
-  word-break: break-all;
 }
 
-.display__result--error {
-  color: var(--magenta);
-}
+/* ---------- keypad ---------- */
 
-/* Keypad */
 .keypad {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 18px;
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .key {
-  padding: 14px 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
-  font-size: 1rem;
+  font-size: clamp(0.85rem, 3.4vw, 1.15rem);
   font-weight: 700;
-  letter-spacing: 0.04em;
   background: var(--panel-2);
   color: var(--ink);
   border: 2px solid var(--line);
-  box-shadow: 3px 3px 0 var(--shadow, #000);
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -145,13 +125,12 @@
   color: var(--amber);
 }
 
-.key:active {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--shadow, #000);
-}
-
 .key--sci {
   color: var(--cyan);
+}
+
+.key--nav {
+  color: var(--dim);
 }
 
 .key--op {
@@ -172,6 +151,158 @@
   color: var(--on-accent);
 }
 
+/* retro.css presses buttons into a hard shadow; on a tight keypad that just
+   causes overlap, so keys stay put. */
+.key:active,
+.seg button:active,
+.menu-toggle:active,
+.drawer__close:active,
+.history__item:active {
+  transform: none;
+  box-shadow: none;
+}
+
+.key:active {
+  background: var(--amber);
+  color: var(--on-accent);
+}
+
+/* ---------- drawer ---------- */
+
+.drawer {
+  width: min(92vw, 380px);
+  max-height: 88dvh;
+  margin: auto;
+  padding: 16px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--line);
+  box-shadow: 8px 8px 0 var(--shadow, #000);
+  overflow: auto;
+}
+
+.drawer::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.drawer__title {
+  margin: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--amber);
+}
+
+.drawer__close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--dim);
+  border: 2px solid var(--line);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.drawer__close:hover {
+  color: var(--magenta);
+  border-color: var(--magenta);
+}
+
+.drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.drawer__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+/* segmented toggles */
+.seg {
+  display: inline-flex;
+  border: 2px solid var(--line);
+}
+
+.seg button {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--dim);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.seg button:hover {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.seg button.is-active,
+.seg button.is-active:hover {
+  background: var(--green);
+  color: var(--on-accent);
+}
+
+/* history */
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40dvh;
+  overflow: auto;
+}
+
+.history__item {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 2px solid var(--line);
+  cursor: pointer;
+}
+
+.history__item:hover {
+  border-color: var(--amber);
+}
+
+.history__math {
+  display: block;
+  width: 100%;
+  font-size: 1rem;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+.history:empty::after {
+  content: "NO HISTORY YET";
+  color: var(--dim);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -182,57 +313,4 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* History */
-.history {
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 420px;
-  overflow: auto;
-}
-
-.history__item {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--bg);
-  color: var(--ink);
-  border: 2px solid var(--line);
-  box-shadow: none;
-  font: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.history__item:hover {
-  border-color: var(--amber);
-  color: var(--amber);
-  transform: none;
-}
-
-.history__expr {
-  color: var(--dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history__result {
-  color: var(--green);
-  font-weight: 700;
-}
-
-.history:empty::after {
-  content: "NO DATA";
-  color: var(--dim);
-  font-size: 0.85rem;
-  letter-spacing: 0.16em;
 }

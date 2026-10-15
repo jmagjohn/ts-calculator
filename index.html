@@ -1,108 +1,90 @@
 <!doctype html>
-<html lang="en" data-theme="phosphor">
+<html lang="en" data-theme="phosphor" data-scanlines="off" data-motion="off">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="A scientific calculator in pure TypeScript, built on mathjs with a retro-brutalist CRT UI."
-    />
-    <title>TS CALCULATOR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="A scientific calculator in pure TypeScript." />
+    <title>Calculator</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#00ff9c" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="TS Calc" />
+    <meta name="apple-mobile-web-app-title" content="Calculator" />
     <script>
-      // FOUC guard: apply the saved theme/flags before first paint.
+      // FOUC guard: apply the saved theme before first paint. Scanlines and
+      // motion are permanently off, so they are not restored from storage.
       try {
-        var d = document.documentElement,
-          s = localStorage;
-        d.dataset.theme = s.getItem("rb-theme") || "phosphor";
-        ["scanlines", "sweep", "motion", "contrast"].forEach(function (k) {
-          var v = s.getItem("rb-" + k);
-          if (v) d.dataset[k] = v;
-        });
+        document.documentElement.dataset.theme =
+          localStorage.getItem("rb-theme") || "phosphor";
       } catch (e) {}
     </script>
     <script src="/retro.js" defer></script>
   </head>
   <body>
-    <div class="page">
-      <header class="masthead">
-        <h1>TS CALCULATOR</h1>
-        <p class="sub">SCIENTIFIC ENGINE &middot; TYPESCRIPT + MATHJS</p>
-      </header>
+    <div class="app">
+      <button
+        class="menu-toggle"
+        id="menu-toggle"
+        type="button"
+        aria-label="Menu"
+        aria-expanded="false"
+        aria-controls="drawer"
+      >
+        <span></span><span></span><span></span>
+      </button>
 
-      <div class="toolbar">
-        <div class="toolbar__group">
-          <span class="toolbar__label">Angle</span>
-          <div class="seg" role="group" aria-label="Angle unit">
-            <button type="button" data-angle="rad" aria-pressed="true">Rad</button>
-            <button type="button" data-angle="deg" aria-pressed="false">Deg</button>
-          </div>
+      <section class="calc" aria-label="Calculator">
+        <div class="display" role="group" aria-label="Calculator display">
+          <math-field class="display__input" id="calc-input" aria-label="Expression"></math-field>
+          <math-field
+            class="display__result"
+            id="calc-result"
+            read-only
+            aria-label="Result"
+          ></math-field>
+          <span class="visually-hidden" id="calc-announcer" role="status" aria-live="polite"></span>
         </div>
+        <div class="keypad" id="keypad"></div>
+      </section>
+    </div>
 
-        <div class="toolbar__group">
-          <span class="toolbar__label">Result</span>
-          <div class="seg" role="group" aria-label="Result format">
-            <button type="button" data-format="decimal" aria-pressed="true">Dec</button>
-            <button type="button" data-format="fraction" aria-pressed="false">Frac</button>
-          </div>
-        </div>
+    <dialog class="drawer" id="drawer" aria-label="Options and history">
+      <div class="drawer__head">
+        <h2 class="drawer__title">Options</h2>
+        <button class="drawer__close" id="drawer-close" type="button" aria-label="Close menu">
+          &times;
+        </button>
+      </div>
 
-        <div class="toolbar__group">
-          <span class="toolbar__label">Theme</span>
-          <select data-theme-select aria-label="Theme"></select>
-        </div>
+      <div class="drawer__section">
+        <span class="drawer__label">Theme</span>
+        <select data-theme-select aria-label="Theme"></select>
+      </div>
 
-        <div class="toolbar__group">
-          <label class="toolbar__label"
-            ><input type="checkbox" data-flag="scanlines" /> Scanlines</label
-          >
-          <label class="toolbar__label"
-            ><input type="checkbox" data-flag="motion" /> Motion</label
-          >
+      <div class="drawer__section">
+        <span class="drawer__label">Angle</span>
+        <div class="seg" role="group" aria-label="Angle unit">
+          <button type="button" data-angle="rad" aria-pressed="true">Rad</button>
+          <button type="button" data-angle="deg" aria-pressed="false">Deg</button>
         </div>
       </div>
 
-      <main class="calc-layout">
-        <section class="card" aria-label="Calculator">
-          <h2>Calculate</h2>
-          <div class="display" role="group" aria-label="Calculator display">
-            <input
-              class="display__expression"
-              id="calc-expression"
-              type="text"
-              inputmode="none"
-              autocomplete="off"
-              autocapitalize="off"
-              autocorrect="off"
-              spellcheck="false"
-              aria-label="Current expression"
-              placeholder="type or build an expression"
-            />
-            <div class="display__result" id="calc-result">0</div>
-            <span class="visually-hidden" id="calc-announcer" role="status" aria-live="polite"></span>
-          </div>
-          <div class="keypad" id="keypad"></div>
-        </section>
+      <div class="drawer__section">
+        <span class="drawer__label">Result</span>
+        <div class="seg" role="group" aria-label="Result format">
+          <button type="button" data-format="exact" aria-pressed="true">Exact</button>
+          <button type="button" data-format="decimal" aria-pressed="false">Decimal</button>
+        </div>
+      </div>
 
-        <aside class="card alt" aria-label="History">
-          <h2>History</h2>
-          <ul class="history" id="history"></ul>
-          <button type="button" class="btn btn-sm" id="clear-history">Clear</button>
-        </aside>
-      </main>
-    </div>
-
-    <div class="statusbar">
-      <span>ANGLE=<b id="status-angle">RAD</b></span>
-      <span>RESULT=<b id="status-format">DEC</b></span>
-      <span>CLICK / ARROWS TO EDIT &middot; ENTER RUNS &middot; ESC CLEARS</span>
-    </div>
+      <div class="drawer__section">
+        <span class="drawer__label">History</span>
+        <ul class="history" id="history"></ul>
+        <button class="btn btn-sm" id="clear-history" type="button">Clear history</button>
+      </div>
+    </dialog>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

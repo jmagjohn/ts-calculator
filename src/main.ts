@@ -1,6 +1,13 @@
+import "mathlive";
 import "./retro.css";
 import "./app.css";
+import { MathfieldElement } from "mathlive";
 import { mountCalculator } from "./ui/calculator";
+
+// Self-host the math fonts (vendored into public/ by scripts/copy-mathlive-assets.mjs)
+// so math renders with no network. Sound effects are not wanted.
+MathfieldElement.fontsDirectory = "/mathlive/fonts";
+MathfieldElement.soundsDirectory = null;
 
 mountCalculator();
 registerServiceWorker();
@@ -19,7 +26,7 @@ function registerServiceWorker(): void {
   });
 }
 
-/** Keep the mobile status-bar colour in step with the selected CRT theme. */
+/** Keep the mobile status-bar colour in step with the selected theme. */
 function syncThemeColor(): void {
   document.addEventListener("retro:theme", (event) => {
     const palette = (event as CustomEvent<{ bg?: string }>).detail;
