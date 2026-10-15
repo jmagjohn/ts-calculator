@@ -7,7 +7,7 @@
 
 import type { Selector } from "mathlive";
 
-export type KeyVariant = "sci" | "op" | "digit" | "equals" | "warn" | "nav";
+export type KeyVariant = "sci" | "op" | "equals" | "warn" | "nav";
 
 export type AppAction = "clear" | "equals" | "ans";
 

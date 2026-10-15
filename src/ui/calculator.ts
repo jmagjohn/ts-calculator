@@ -10,7 +10,13 @@
  */
 
 import { MathfieldElement, type Selector } from "mathlive";
-import { evaluate, toLatex, type AngleMode, type ResultFormat } from "../engine/engine";
+import {
+  evaluate,
+  toLatex,
+  type AngleMode,
+  type Evaluation,
+  type ResultFormat,
+} from "../engine/engine";
 import { KEYPAD_ROWS, type Key } from "./keypad";
 
 interface HistoryEntry {
@@ -76,6 +82,7 @@ export function mountCalculator(): void {
   let angleMode: AngleMode = "rad";
   let resultFormat: ResultFormat = "exact";
   let lastAnswer: number | null = null;
+  let lastEvaluation: Evaluation | null = null;
   const history: HistoryEntry[] = [];
 
   const focusInput = (): void => input.focus();
@@ -96,16 +103,20 @@ export function mountCalculator(): void {
         item.title = "Load this expression";
         item.append(renderMath(`${entry.latex}=${entry.result}`, "history__math"));
 
-        const load = (): void => {
+        // MathLive's shadow root re-enables pointer-events on its internals and
+        // stops propagation, so a bubble-phase handler never fires. Listen in the
+        // capture phase and stop the event before the math-field sees it.
+        const load = (event: Event): void => {
+          event.stopPropagation();
           input.value = entry.latex;
           focusInput();
           drawer.close();
         };
-        item.addEventListener("click", load);
+        item.addEventListener("click", load, { capture: true });
         item.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            load();
+            load(event);
           }
         });
         return item;
@@ -126,6 +137,7 @@ export function mountCalculator(): void {
       const evaluation = evaluate(latex, angleMode);
       const shown = toLatex(evaluation, resultFormat);
       resultField.value = shown;
+      lastEvaluation = evaluation;
       if (evaluation.value !== null) {
         lastAnswer = evaluation.value;
       }
@@ -144,6 +156,7 @@ export function mountCalculator(): void {
     if (name === "clear") {
       input.value = "";
       resultField.value = "";
+      lastEvaluation = null;
       focusInput();
     } else if (name === "equals") {
       equation();
@@ -205,6 +218,10 @@ export function mountCalculator(): void {
   formatGroup.onSelect((value) => {
     resultFormat = value as ResultFormat;
     formatGroup.render(resultFormat);
+    // Re-render the existing result, not just future ones.
+    if (lastEvaluation) {
+      resultField.value = toLatex(lastEvaluation, resultFormat);
+    }
     focusInput();
   });
 
