@@ -26,6 +26,11 @@ network-first so a new deploy is picked up on the next online load.
   theme, angle mode, exact/decimal results, and history. No branding header.
 - **Scanlines and CRT motion are off permanently** (the retro stylesheet's
   overlays are disabled and their toggles removed).
+- **The keypad is the only keyboard.** MathLive's virtual keyboard policy is
+  forced to `manual` and the math fields use `inputmode="none"`, so focusing
+  the display never raises a second on-screen keyboard.
+- **Enter evaluates from anywhere** (physical or soft keyboard), except while
+  the options drawer is open.
 
 ## The editor
 

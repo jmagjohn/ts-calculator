@@ -37,11 +37,19 @@
 
       <section class="calc" aria-label="Calculator">
         <div class="display" role="group" aria-label="Calculator display">
-          <math-field class="display__input" id="calc-input" aria-label="Expression"></math-field>
+          <math-field
+            class="display__input"
+            id="calc-input"
+            aria-label="Expression"
+            inputmode="none"
+          ></math-field>
           <math-field
             class="display__result"
             id="calc-result"
             read-only
+            tabindex="-1"
+            inputmode="none"
+            math-virtual-keyboard-policy="manual"
             aria-label="Result"
           ></math-field>
           <span class="visually-hidden" id="calc-announcer" role="status" aria-live="polite"></span>

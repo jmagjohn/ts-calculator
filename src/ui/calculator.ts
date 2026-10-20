@@ -85,6 +85,11 @@ export function mountCalculator(): void {
   let lastEvaluation: Evaluation | null = null;
   const history: HistoryEntry[] = [];
 
+  // We provide our own keypad, so MathLive must never auto-show its virtual
+  // keyboard on touch devices (policy defaults to 'auto' = auto-show on focus,
+  // which is the second keyboard users see, complete with its own dead Enter).
+  input.mathVirtualKeyboardPolicy = "manual";
+
   const focusInput = (): void => input.focus();
 
   function announce(message: string): void {
@@ -230,8 +235,11 @@ export function mountCalculator(): void {
     renderHistory();
   });
 
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+  // Handle Enter document-wide so it evaluates whether it comes from a physical
+  // keyboard, a soft keyboard or an on-screen one. Skipped while the drawer is
+  // open so Enter still activates drawer buttons.
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !drawer.open) {
       event.preventDefault();
       equation();
     }
