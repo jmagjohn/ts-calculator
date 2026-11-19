@@ -1,13 +1,13 @@
 {
   "name": "TS Calculator",
   "short_name": "TS Calc",
-  "description": "A scientific calculator in pure TypeScript, built on mathjs with a retro-brutalist CRT interface.",
+  "description": "A scientific calculator with a retro desktop look.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#08090a",
-  "theme_color": "#00ff9c",
+  "background_color": "#008080",
+  "theme_color": "#008080",
   "categories": ["utilities", "productivity"],
   "icons": [
     {

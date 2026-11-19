@@ -17,36 +17,54 @@ Installable and offline-capable after the first visit.
 The service worker (`public/sw.js`) caches the app shell; navigations are
 network-first so a new deploy is picked up on the next online load.
 
-## Behaviour
+## Look
 
-- **The screen never scrolls.** The calculator fills the viewport and is
-  locked there (`100dvh`-style layout, `body { overflow: hidden }`).
-- **Nothing is calculated until you press `=`.** There is no live preview.
-- **One control chrome:** a small hamburger, top-right, opens a drawer with
-  theme, angle mode, exact/decimal results, and history. No branding header.
-- **Scanlines and CRT motion are off permanently** (the retro stylesheet's
-  overlays are disabled and their toggles removed).
-- **The keypad is the only keyboard.** MathLive's virtual keyboard policy is
-  forced to `manual` and the math fields use `inputmode="none"`, so focusing
-  the display never raises a second on-screen keyboard.
-- **Enter evaluates from anywhere** (physical or soft keyboard), except while
-  the options drawer is open.
+Styled after the **Retro desktop** theme (lookbook LB-30): a teal desktop,
+a silver window with 4-layer bevels, a navy-gradient title bar, a sunken white
+display, square corners, Tahoma, and a taskbar with a working Start menu.
 
-## The editor
+## Buttons
 
-The input is a **MathLive** `<math-field>`: a real structural editor.
+The layout follows a classic phone scientific calculator:
 
-| Key | What it does |
+| Row | Keys |
 | --- | --- |
-| `a/b` | inserts `\frac{\placeholder{}}{\placeholder{}}` — caret lands in the numerator |
-| `x^n` | inserts `^{\placeholder{}}` — caret lands in the exponent |
-| `√` | inserts `\sqrt{\placeholder{}}` — caret lands in the radicand |
-| `←` `→` | move the caret through the structure |
-| `⌫` | delete backwards |
-| `sin cos tan ln log` | insert a function applied to a slot |
+| Toolbar | `Settings` `Copy` `Paste` `Clear` |
+| Top | `2nd` · smart `( )` · `%` · cursor-keys toggle |
+| Body | fraction `÷` `×` `⌫` / `7 8 9 −` / `4 5 6 +` / `1 2 3 =` / `0 .` |
 
-The `\placeholder{}` (rather than an empty group `{}`) is what makes MathLive
-focus the new slot. This was found by browser QA, not by guessing.
+- **`2nd`** swaps the body for a tabbed scientific panel (swipe or tap the
+  tabs): √, x², ⁿ√, xⁿ, x⁻¹, x!, nCr, nPr, ln, e, eˣ, π, log, log₂, logₓ, 10ˣ,
+  1/x, 2ˣ, |x|, Ans, and sin/cos/tan, their inverses, hyperbolic functions,
+  sec/csc/cot, °, ∛, and a DEG/RAD switch. The top row becomes `( ) E`.
+- **`( )`** opens a bracket, or closes one when a bracket is open and a value
+  comes before the cursor.
+- **Cursor toggle** adds ◀ ▶ keys (hold to repeat) for moving through
+  fractions, powers and roots. `⌫` also repeats while held.
+- **After `=`**: a digit or function starts a new calculation; an operator
+  continues from `Ans`.
+- **Tap the answer** to flip between fraction and decimal.
+- **Settings**: degrees/radians, answer format (auto / exact / decimal),
+  animations on or off. Settings and the last 50 calculations are saved on
+  the device.
+- Nothing is calculated until you press `=`. Enter evaluates and Escape clears
+  on a physical keyboard.
+
+## Animations
+
+Taken from the motion lookbook and turned off by the Animations setting or the
+system's reduced-motion preference:
+
+| Where | Animation |
+| --- | --- |
+| Every key | press squish + spring back (AN-06), with a Win95 bevel flip |
+| `2nd` / cursor toggle | fade-through swap (AN-01) |
+| `Clear` | circle wipe from the button (AN-04) |
+| Errors | shake (AN-11) |
+| `Copy` / `Paste` | label morphs into a check (AN-10) |
+| History, Start menu | staggered reveal (AN-03) |
+| Windows | zoom open from the button that opened them |
+| Answer | rises in with a spring |
 
 ## Stack
 
@@ -85,22 +103,22 @@ triggers a production deploy.
 ## Layout
 
 ```
-index.html                     full-screen shell: math fields, keypad mount, drawer
+index.html                     window, display, toolbar, taskbar, dialogs
 public/
-  retro.js                     retro-brutalist runtime (skill asset)
   sw.js                        offline app-shell service worker
   manifest.webmanifest         PWA manifest
   icons/                       PWA icons (generated)
 src/
   main.ts                      bootstrap, MathLive font/sound config, service worker
-  retro.css                    retro-brutalist stylesheet (skill asset)
-  app.css                      locked full-screen layout
+  app.css                      retro desktop theme + layout
   engine/
     engine.ts                  compute-engine facade: LaTeX in, exact + decimal out
     engine.test.ts             unit tests
   ui/
-    keypad.ts                  keypad as data (inserts, commands, actions)
-    calculator.ts              controller: editor, results, history, drawer
+    keypad.ts                  keypad layouts as data
+    calculator.ts              controller: editor, keys, results, windows
+    motion.ts                  animation helpers (Web Animations API)
+    storage.ts                 saved settings + history
 scripts/
   copy-mathlive-assets.mjs     vendors MathLive fonts into public/
   generate-icons.mjs           generates the PWA icons (zero-dep PNG encoder)
@@ -112,4 +130,3 @@ scripts/
   ~1.4 MB gzipped. Fine as an installable PWA (fetched once, then cached
   offline), but a good candidate for code-splitting — e.g. lazy-load
   compute-engine on first `=` since it isn't needed to render the editor.
-- **History is in-memory.** Persistence lands with a later pass.

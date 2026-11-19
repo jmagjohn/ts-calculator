@@ -8,11 +8,10 @@
  *    which sidesteps needing to know Vite's hashed filenames at build time.
  */
 
-const CACHE = "ts-calculator-v1";
+const CACHE = "ts-calculator-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/retro.js",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

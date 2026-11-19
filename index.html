@@ -1,98 +1,171 @@
 <!doctype html>
-<html lang="en" data-theme="phosphor" data-scanlines="off" data-motion="off">
+<html lang="en" data-motion="on">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="A scientific calculator in pure TypeScript." />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="description" content="A scientific calculator with a retro desktop look." />
     <title>Calculator</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#00ff9c" />
+    <meta name="theme-color" content="#008080" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Calculator" />
-    <script>
-      // FOUC guard: apply the saved theme before first paint. Scanlines and
-      // motion are permanently off, so they are not restored from storage.
-      try {
-        document.documentElement.dataset.theme =
-          localStorage.getItem("rb-theme") || "phosphor";
-      } catch (e) {}
-    </script>
-    <script src="/retro.js" defer></script>
   </head>
   <body>
-    <div class="app">
-      <button
-        class="menu-toggle"
-        id="menu-toggle"
-        type="button"
-        aria-label="Menu"
-        aria-expanded="false"
-        aria-controls="drawer"
-      >
-        <span></span><span></span><span></span>
-      </button>
+    <div class="desktop">
+      <main class="window calc" aria-label="Calculator">
+        <header class="titlebar">
+          <svg class="titlebar__icon" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2" y="1" width="12" height="14" fill="#c0c0c0" stroke="#000" />
+            <rect x="4" y="3" width="8" height="3" fill="#008080" />
+            <rect x="4" y="8" width="2" height="2" /><rect x="7" y="8" width="2" height="2" />
+            <rect x="10" y="8" width="2" height="2" /><rect x="4" y="11" width="2" height="2" />
+            <rect x="7" y="11" width="2" height="2" /><rect x="10" y="11" width="2" height="2" fill="#000080" />
+          </svg>
+          <h1 class="titlebar__title">Calculator</h1>
+          <button class="titlebar__box" id="btn-history" type="button" aria-label="History">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path d="M8 4.5V8h2.8" fill="none" stroke="currentColor" stroke-width="1.6" />
+            </svg>
+          </button>
+        </header>
 
-      <section class="calc" aria-label="Calculator">
-        <div class="display" role="group" aria-label="Calculator display">
-          <math-field
-            class="display__input"
-            id="calc-input"
-            aria-label="Expression"
-            inputmode="none"
-          ></math-field>
-          <math-field
-            class="display__result"
-            id="calc-result"
-            read-only
-            tabindex="-1"
-            inputmode="none"
-            math-virtual-keyboard-policy="manual"
-            aria-label="Result"
-          ></math-field>
+        <section class="display" id="display" data-phase="edit" aria-label="Display">
+          <div class="display__status">
+            <button class="chip" id="angle-chip" type="button">DEG</button>
+            <button class="clear-entry" id="clear-entry" type="button" aria-label="Clear expression">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2.2" />
+              </svg>
+            </button>
+          </div>
+          <div class="display__screen" id="display-screen">
+            <!-- Cloned in by main.ts once MathLive is configured, so the
+                 fields never start loading fonts from the wrong folder. -->
+            <template id="screen-template">
+              <math-field
+                class="display__input"
+                id="calc-input"
+                aria-label="Expression"
+                placeholder="0"
+                inputmode="none"
+                math-virtual-keyboard-policy="manual"
+              ></math-field>
+              <div class="display__out">
+                <math-field
+                  class="display__result"
+                  id="calc-result"
+                  read-only
+                  tabindex="-1"
+                  inputmode="none"
+                  math-virtual-keyboard-policy="manual"
+                  aria-label="Result"
+                ></math-field>
+                <p class="display__error" id="calc-error" role="alert"></p>
+              </div>
+            </template>
+          </div>
           <span class="visually-hidden" id="calc-announcer" role="status" aria-live="polite"></span>
+        </section>
+
+        <nav class="toolbar" aria-label="Actions">
+          <button class="btn" id="btn-settings" type="button"><span class="toolbar__label">Settings</span></button>
+          <button class="btn" id="btn-copy" type="button"><span class="toolbar__label">Copy</span></button>
+          <button class="btn" id="btn-paste" type="button"><span class="toolbar__label">Paste</span></button>
+          <button class="btn btn--danger" id="btn-clear" type="button"><span class="toolbar__label">Clear</span></button>
+        </nav>
+
+        <div class="keypad" id="keypad">
+          <div class="keygrid keypad__top" id="keypad-top"></div>
+          <div class="keypad__body" id="keypad-body"></div>
         </div>
-        <div class="keypad" id="keypad"></div>
-      </section>
+      </main>
     </div>
 
-    <dialog class="drawer" id="drawer" aria-label="Options and history">
-      <div class="drawer__head">
-        <h2 class="drawer__title">Options</h2>
-        <button class="drawer__close" id="drawer-close" type="button" aria-label="Close menu">
-          &times;
+    <footer class="taskbar">
+      <button class="btn start" id="start-button" type="button" aria-expanded="false" aria-controls="start-menu">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M1 3l6-1v5.5H1z" fill="#ff0000" /><path d="M8 1.8L15 1v6.5H8z" fill="#00a000" />
+          <path d="M1 8.5h6V14l-6-1z" fill="#0000ff" /><path d="M8 8.5h7V15l-7-.9z" fill="#ffd200" />
+        </svg>
+        Start
+      </button>
+      <span class="taskbar__task">Calculator</span>
+      <div class="tray">
+        <button class="tray__angle" id="tray-angle" type="button" aria-label="Switch angle unit">DEG</button>
+        <time id="clock"></time>
+      </div>
+    </footer>
+
+    <div class="start-menu window" id="start-menu" hidden>
+      <div class="start-menu__brand"><span>Calc<b>95</b></span></div>
+      <ul class="start-menu__items">
+        <li><button class="start-menu__item" type="button" data-menu="history">History</button></li>
+        <li><button class="start-menu__item" type="button" data-menu="settings">Settings</button></li>
+        <li class="start-menu__sep" role="separator"></li>
+        <li><button class="start-menu__item" type="button" data-menu="shutdown">Shut Down…</button></li>
+      </ul>
+    </div>
+
+    <dialog class="window dialog" id="settings-window" aria-labelledby="settings-title">
+      <header class="titlebar">
+        <h2 class="titlebar__title" id="settings-title">Settings</h2>
+        <button class="titlebar__box" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2.2" /></svg>
         </button>
+      </header>
+      <div class="dialog__body">
+        <fieldset class="group">
+          <legend>Angle unit</legend>
+          <label class="radio"><input type="radio" name="angle" value="deg" /><span>Degrees</span></label>
+          <label class="radio"><input type="radio" name="angle" value="rad" /><span>Radians</span></label>
+        </fieldset>
+        <fieldset class="group">
+          <legend>Answers</legend>
+          <label class="radio"><input type="radio" name="format" value="auto" /><span>Auto: fractions when they're tidy</span></label>
+          <label class="radio"><input type="radio" name="format" value="exact" /><span>Always exact (fractions, √, π)</span></label>
+          <label class="radio"><input type="radio" name="format" value="decimal" /><span>Always decimal</span></label>
+        </fieldset>
+        <fieldset class="group">
+          <legend>Display</legend>
+          <label class="check"><input type="checkbox" name="animations" /><span>Animations</span></label>
+        </fieldset>
+        <p class="hint">Tip: tap an answer to flip between fraction and decimal.</p>
       </div>
-
-      <div class="drawer__section">
-        <span class="drawer__label">Theme</span>
-        <select data-theme-select aria-label="Theme"></select>
-      </div>
-
-      <div class="drawer__section">
-        <span class="drawer__label">Angle</span>
-        <div class="seg" role="group" aria-label="Angle unit">
-          <button type="button" data-angle="rad" aria-pressed="true">Rad</button>
-          <button type="button" data-angle="deg" aria-pressed="false">Deg</button>
-        </div>
-      </div>
-
-      <div class="drawer__section">
-        <span class="drawer__label">Result</span>
-        <div class="seg" role="group" aria-label="Result format">
-          <button type="button" data-format="exact" aria-pressed="true">Exact</button>
-          <button type="button" data-format="decimal" aria-pressed="false">Decimal</button>
-        </div>
-      </div>
-
-      <div class="drawer__section">
-        <span class="drawer__label">History</span>
-        <ul class="history" id="history"></ul>
-        <button class="btn btn-sm" id="clear-history" type="button">Clear history</button>
-      </div>
+      <footer class="dialog__foot">
+        <button class="btn btn--default" type="button" data-close>OK</button>
+      </footer>
     </dialog>
+
+    <dialog class="window dialog" id="history-window" aria-labelledby="history-title">
+      <header class="titlebar">
+        <h2 class="titlebar__title" id="history-title">History</h2>
+        <button class="titlebar__box" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2.2" /></svg>
+        </button>
+      </header>
+      <div class="dialog__body">
+        <div class="listbox">
+          <ul class="history" id="history-list"></ul>
+          <p class="history__empty" id="history-empty">No calculations yet.</p>
+        </div>
+      </div>
+      <footer class="dialog__foot">
+        <button class="btn" id="clear-history" type="button">Clear history</button>
+        <button class="btn btn--default" type="button" data-close>Close</button>
+      </footer>
+    </dialog>
+
+    <div class="shutdown" id="shutdown" tabindex="-1" hidden>
+      <p>It's now safe to turn off<br />your calculator.</p>
+      <small>(tap anywhere to start it again)</small>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

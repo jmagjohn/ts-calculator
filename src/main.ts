@@ -1,5 +1,4 @@
 import "mathlive";
-import "./retro.css";
 import "./app.css";
 import { MathfieldElement } from "mathlive";
 import { mountCalculator } from "./ui/calculator";
@@ -9,9 +8,13 @@ import { mountCalculator } from "./ui/calculator";
 MathfieldElement.fontsDirectory = "/mathlive/fonts";
 MathfieldElement.soundsDirectory = null;
 
+const template = document.getElementById("screen-template") as HTMLTemplateElement | null;
+if (template) {
+  template.replaceWith(template.content.cloneNode(true));
+}
+
 mountCalculator();
 registerServiceWorker();
-syncThemeColor();
 
 /** Register the offline app-shell worker (production builds only). */
 function registerServiceWorker(): void {
@@ -23,16 +26,5 @@ function registerServiceWorker(): void {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       // Offline support is a bonus; never let it break the app.
     });
-  });
-}
-
-/** Keep the mobile status-bar colour in step with the selected theme. */
-function syncThemeColor(): void {
-  document.addEventListener("retro:theme", (event) => {
-    const palette = (event as CustomEvent<{ bg?: string }>).detail;
-    if (!palette?.bg) {
-      return;
-    }
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", palette.bg);
   });
 }
