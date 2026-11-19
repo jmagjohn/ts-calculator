@@ -29,7 +29,8 @@ export type AppAction =
   | "paren"
   | "ans"
   | "angle"
-  | "backspace";
+  | "backspace"
+  | "done";
 
 export type KeyAction =
   | { type: "insert"; latex: string; after: AfterResult }
@@ -235,3 +236,56 @@ export const SCIENCE_PAGES: { title: string; keys: Key[] }[] = [
     ],
   },
 ];
+
+/** Keypad for typing equations on the graph tabs (6 columns x 6 rows). */
+export function graphKeys(): Key[] {
+  const variable = (name: string): Key => ({
+    label: `<i>${name}</i>`,
+    aria: name,
+    action: { type: "insert", latex: name, after: "fresh" },
+    variant: "fn",
+  });
+  return [
+    variable("x"),
+    variable("y"),
+    op("=", "=", "Equals sign"),
+    fn("x<sup>n</sup>", `^{${SLOT}}`, "Power"),
+    fn("x<sup>2</sup>", "^{2}", "Square"),
+    fn("√", `\\sqrt{${SLOT}}`, "Square root"),
+
+    fn("sin", "\\sin(", "Sine"),
+    fn("cos", "\\cos(", "Cosine"),
+    fn("tan", "\\tan(", "Tangent"),
+    fn("ln", "\\ln(", "Natural log"),
+    fn("log", "\\log(", "Log base 10"),
+    fn(ICONS.fraction, `\\frac{${SLOT}}{${SLOT}}`, "Fraction"),
+
+    num("7"),
+    num("8"),
+    num("9"),
+    op("÷", "\\div", "Divide"),
+    op("(", "(", "Open parenthesis"),
+    op(")", ")", "Close parenthesis"),
+
+    num("4"),
+    num("5"),
+    num("6"),
+    op("×", "\\times", "Multiply"),
+    moveLeft,
+    moveRight,
+
+    num("1"),
+    num("2"),
+    num("3"),
+    op("−", "-", "Minus"),
+    fn("|x|", `\\left|${SLOT}\\right|`, "Absolute value"),
+    backspace,
+
+    num("0"),
+    num("."),
+    fn("π", "\\pi", "Pi"),
+    fn("e", "e", "Euler's number"),
+    op("+", "+", "Plus"),
+    app("Done", "done", "Hide keypad", "equals"),
+  ];
+}

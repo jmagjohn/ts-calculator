@@ -9,9 +9,14 @@
 
 const EASE_OUT = "cubic-bezier(.2,.8,.2,1)";
 const EASE_IN = "cubic-bezier(.4,0,1,1)";
-/** Spring with a small overshoot, as a linear() curve (AN-06). */
-export const SPRING =
+/** Spring with a small overshoot, as a linear() curve (AN-06). Older Safari
+ *  has no linear(), and an unknown easing makes animate() throw, so fall back. */
+const LINEAR_SPRING =
   "linear(0, 0.21 6%, 0.68 15%, 0.96 23%, 1.06 30%, 1.08 36%, 1.05 44%, 1.01 54%, 0.99 66%, 1)";
+export const SPRING =
+  typeof CSS !== "undefined" && CSS.supports("transition-timing-function", LINEAR_SPRING)
+    ? LINEAR_SPRING
+    : "cubic-bezier(.34,1.56,.64,1)";
 
 const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 

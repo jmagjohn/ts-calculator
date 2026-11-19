@@ -21,7 +21,8 @@ network-first so a new deploy is picked up on the next online load.
 
 Styled after the **Retro desktop** theme (lookbook LB-30): a teal desktop,
 a silver window with 4-layer bevels, a navy-gradient title bar, a sunken white
-display, square corners, Tahoma, and a taskbar with a working Start menu.
+display, square corners and Tahoma. Property-sheet tabs switch between
+**Calc · Graph · 3D · History**.
 
 ## Buttons
 
@@ -50,6 +51,30 @@ The layout follows a classic phone scientific calculator:
 - Nothing is calculated until you press `=`. Enter evaluates and Escape clears
   on a physical keyboard.
 
+## Graphing
+
+**Graph** plots up to six equations at once, each in its own colour. Tap the
+colour square to hide or show one.
+
+| You type | It draws |
+| --- | --- |
+| `y = sin(x)` or just `sin(x)` | a function of x |
+| `x = y²` | a function of y |
+| `x² + y² = 9` | any equation in x and y (implicit, by marching squares) |
+
+Drag to move, pinch or scroll to zoom, double-tap or ⌂ to reset. Tap a curve to
+read off a point; drag that point to slide it along the curve.
+
+**3D** plots surfaces `z = f(x, y)` (type just the right-hand side). Drag to
+spin (it coasts when you let go and slowly turns by itself when idle), pinch to
+zoom, `+`/`−` to change the x/y range. One surface is coloured by height;
+several are drawn in solid colours.
+
+Both tabs share a keypad with x, y, =, powers, roots, trig and logs. It opens
+when you tap an equation; **Done** or tapping the graph puts it away. Graphs
+always use radians. Equations compile to JavaScript via compute-engine, so a
+point costs well under a microsecond.
+
 ## Animations
 
 Taken from the motion lookbook and turned off by the Animations setting or the
@@ -62,8 +87,10 @@ system's reduced-motion preference:
 | `Clear` | circle wipe from the button (AN-04) |
 | Errors | shake (AN-11) |
 | `Copy` / `Paste` | label morphs into a check (AN-10) |
-| History, Start menu | staggered reveal (AN-03) |
-| Windows | zoom open from the button that opened them |
+| Tabs | fade-through (AN-01) |
+| History | staggered reveal (AN-03) |
+| Graphs | curves draw on left to right; 3D surfaces rise up with a spring |
+| Settings window | zooms open from the button |
 | Answer | rises in with a spring |
 
 ## Stack
@@ -103,7 +130,7 @@ triggers a production deploy.
 ## Layout
 
 ```
-index.html                     window, display, toolbar, taskbar, dialogs
+index.html                     window, tabs, calculator page, settings dialog
 public/
   sw.js                        offline app-shell service worker
   manifest.webmanifest         PWA manifest
@@ -114,11 +141,19 @@ src/
   engine/
     engine.ts                  compute-engine facade: LaTeX in, exact + decimal out
     engine.test.ts             unit tests
+  graph/
+    equation.ts                equation LaTeX -> compiled function (2D kinds, 3D)
+    equation.test.ts           unit tests
+    plot2d.ts                  2D canvas plotter: grid, curves, implicit, trace
+    plot3d.ts                  3D canvas surface renderer: mesh, shading, orbit
   ui/
+    app.ts                     tabs and pages
     keypad.ts                  keypad layouts as data
-    calculator.ts              controller: editor, keys, results, windows
+    keys.ts                    key buttons: press squish, hold-to-repeat
+    calculator.ts              calculator + history pages
+    graph.ts                   graph pages: equation list, keypad, plot
     motion.ts                  animation helpers (Web Animations API)
-    storage.ts                 saved settings + history
+    storage.ts                 saved settings, history, equations, last tab
 scripts/
   copy-mathlive-assets.mjs     vendors MathLive fonts into public/
   generate-icons.mjs           generates the PWA icons (zero-dep PNG encoder)

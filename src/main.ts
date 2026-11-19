@@ -1,7 +1,7 @@
 import "mathlive";
 import "./app.css";
 import { MathfieldElement } from "mathlive";
-import { mountCalculator } from "./ui/calculator";
+import { mountApp } from "./ui/app";
 
 // Self-host the math fonts (vendored into public/ by scripts/copy-mathlive-assets.mjs)
 // so math renders with no network. Sound effects are not wanted.
@@ -13,7 +13,7 @@ if (template) {
   template.replaceWith(template.content.cloneNode(true));
 }
 
-mountCalculator();
+mountApp();
 registerServiceWorker();
 
 /** Register the offline app-shell worker (production builds only). */

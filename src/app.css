@@ -1,6 +1,6 @@
 /* Retro desktop theme (lookbook LB-30): teal desktop, silver windows with
    4-layer bevels, navy-gradient title bars, sunken white fields, square
-   corners, Tahoma, and a taskbar with a Start button. */
+   corners and Tahoma, with property-sheet tabs for the app's modes. */
 
 :root {
   --desktop: #008080;
@@ -25,7 +25,6 @@
 
   --font: Tahoma, "MS Sans Serif", "Segoe UI", Verdana, Geneva, sans-serif;
   --spring: linear(0, 0.21 6%, 0.68 15%, 0.96 23%, 1.06 30%, 1.08 36%, 1.05 44%, 1.01 54%, 0.99 66%, 1);
-  --taskbar-h: 40px;
 
   color-scheme: light;
 }
@@ -74,11 +73,11 @@ button {
 
 .desktop {
   position: fixed;
-  inset: 0 0 calc(var(--taskbar-h) + env(safe-area-inset-bottom)) 0;
+  inset: 0;
   display: flex;
   justify-content: center;
-  padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) 6px
-    calc(6px + env(safe-area-inset-left));
+  padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right))
+    calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
 }
 
 .window {
@@ -104,6 +103,67 @@ button {
   .calc {
     height: min(860px, 100%);
   }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.window__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* ---------- main tabs (Win95 property-sheet tabs) ---------- */
+
+.tabs {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px 2px 0;
+  margin-bottom: -3px;
+  position: relative;
+  z-index: 1;
+}
+
+.tab {
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: var(--face);
+  box-shadow: inset 1px 1px var(--hi), inset -1px 0 var(--dark), inset -2px 0 var(--shadow),
+    inset 2px 2px var(--light);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transform: translateY(3px);
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tab.is-active {
+  transform: none;
+  height: 39px;
+  color: var(--navy);
+}
+
+.tab:not(.is-active) {
+  color: #303030;
+}
+
+.window__content {
+  padding: 8px 4px 4px;
+  box-shadow: inset 1px 1px var(--hi), inset -1px -1px var(--dark), inset -2px -2px var(--shadow);
 }
 
 /* ---------- title bar ---------- */
@@ -332,7 +392,8 @@ math-field::part(content) {
 .btn:focus-visible,
 .key:focus-visible,
 .tab:focus-visible,
-.start-menu__item:focus-visible {
+.subtab:focus-visible,
+.eq__swatch:focus-visible {
   outline: 1px dotted var(--ink);
   outline-offset: -5px;
 }
@@ -524,14 +585,14 @@ math-field::part(content) {
 
 /* ---------- 2nd panel: tabs + paged keys ---------- */
 
-.tabs {
+.subtabs {
   flex: 0 0 auto;
   display: flex;
   gap: 2px;
   padding-left: 2px;
 }
 
-.tab {
+.subtab {
   position: relative;
   padding: 5px 12px 4px;
   border: 0;
@@ -543,7 +604,7 @@ math-field::part(content) {
   transform: translateY(2px);
 }
 
-.tab.is-active {
+.subtab.is-active {
   transform: none;
   font-weight: 700;
   z-index: 1;
@@ -570,151 +631,6 @@ math-field::part(content) {
   scroll-snap-align: start;
   grid-template-rows: repeat(5, minmax(0, 1fr));
   padding: 0 1px;
-}
-
-/* ---------- taskbar + start menu ---------- */
-
-.taskbar {
-  position: fixed;
-  inset: auto 0 0 0;
-  height: calc(var(--taskbar-h) + env(safe-area-inset-bottom));
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px calc(4px + env(safe-area-inset-right)) env(safe-area-inset-bottom)
-    calc(4px + env(safe-area-inset-left));
-  background: var(--face);
-  box-shadow: inset 0 1px var(--light), inset 0 2px var(--hi);
-  z-index: 10;
-}
-
-.start {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
-  min-height: 0;
-  padding: 0 8px 0 5px;
-  font-weight: 700;
-}
-
-.start svg {
-  width: 18px;
-  height: 18px;
-}
-
-.taskbar__task {
-  flex: 1;
-  min-width: 0;
-  max-width: 180px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  background: var(--dither);
-  box-shadow: var(--pressed);
-  font-weight: 700;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tray {
-  margin-left: auto;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  box-shadow: inset 1px 1px var(--shadow), inset -1px -1px var(--hi);
-  font-size: 13px;
-}
-
-.tray__angle {
-  padding: 0;
-  border: 0;
-  background: none;
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--navy);
-  cursor: pointer;
-}
-
-.start-menu {
-  position: fixed;
-  left: calc(2px + env(safe-area-inset-left));
-  bottom: calc(var(--taskbar-h) + env(safe-area-inset-bottom) - 2px);
-  z-index: 20;
-  display: flex;
-  min-width: 210px;
-  transform-origin: bottom left;
-  animation: menu-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.start-menu[hidden] {
-  display: none;
-}
-
-@keyframes menu-in {
-  from {
-    clip-path: inset(100% 0 0 0);
-  }
-  to {
-    clip-path: inset(0);
-  }
-}
-
-.start-menu__brand {
-  width: 30px;
-  background: linear-gradient(0deg, var(--navy), var(--navy-2));
-  color: var(--light);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 8px;
-}
-
-.start-menu__brand span {
-  writing-mode: vertical-rl;
-  rotate: 180deg;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.start-menu__brand b {
-  color: #fff;
-}
-
-.start-menu__items {
-  flex: 1;
-  margin: 0;
-  padding: 2px 0;
-  list-style: none;
-}
-
-.start-menu__item {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 0;
-  background: none;
-  text-align: left;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.start-menu__item:hover,
-.start-menu__item:active {
-  background: var(--navy);
-  color: #fff;
-}
-
-.start-menu__sep {
-  height: 2px;
-  margin: 3px 4px;
-  box-shadow: inset 0 1px var(--shadow), inset 0 -1px var(--hi);
 }
 
 /* ---------- dialogs ---------- */
@@ -903,47 +819,214 @@ math-field::part(content) {
   display: none;
 }
 
-/* ---------- shut down easter egg ---------- */
+/* ---------- history page ---------- */
 
-.shutdown {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 24px;
-  background: #000;
-  color: #ff8a00;
-  text-align: center;
-  outline: 0;
-  cursor: pointer;
-  animation: power-off 500ms cubic-bezier(0.65, 0, 0.35, 1);
+.page--history .listbox {
+  flex: 1;
+  max-height: none;
 }
 
-.shutdown[hidden] {
+.history__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---------- graph pages ---------- */
+
+.plot {
+  position: relative;
+  flex: 1;
+  min-height: 140px;
+  background: var(--field);
+  box-shadow: var(--sunken);
+  padding: 2px;
+}
+
+.plot__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot__canvas:active {
+  cursor: grabbing;
+}
+
+.plot__tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plot__tool {
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.plot__tool svg {
+  width: 16px;
+  height: 16px;
+}
+
+.plot__hint {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  margin: 0;
+  padding: 1px 5px;
+  font-size: 11px;
+  color: #505050;
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+
+.page--graph.is-editing .plot__hint {
   display: none;
 }
 
-.shutdown p {
-  margin: 0;
-  font-size: clamp(1.3rem, 6vw, 2rem);
-  line-height: 1.4;
+.equations {
+  flex: 0 0 auto;
+  max-height: 32%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--field);
+  box-shadow: var(--sunken);
+  padding: 3px;
 }
 
-.shutdown small {
-  color: #a65a00;
+.page--graph.is-editing .equations {
+  max-height: 104px;
 }
 
-@keyframes power-off {
-  0% {
-    clip-path: inset(0 0 100% 0);
-  }
-  100% {
-    clip-path: inset(0);
-  }
+.eq {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 2px;
+  border: 1px dotted transparent;
+}
+
+.eq.is-active {
+  border-color: var(--navy);
+  background: #f0f0ff;
+}
+
+.eq__swatch {
+  grid-column: 1;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: var(--face);
+  box-shadow: var(--raised);
+  cursor: pointer;
+  position: relative;
+}
+
+.eq__swatch::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  background: var(--c);
+  transition: scale 300ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms;
+}
+
+.eq__swatch[aria-pressed="false"]::after {
+  scale: 0.3;
+  opacity: 0.35;
+}
+
+.eq__prefix {
+  grid-column: 2;
+  font-family: "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.2rem;
+}
+
+.eq__field {
+  grid-column: 3;
+  --size: 1.3rem;
+  min-height: 36px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.eq__field::part(content) {
+  justify-content: flex-start;
+}
+
+.eq__remove {
+  grid-column: 4;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #606060;
+  cursor: pointer;
+}
+
+.eq__remove svg {
+  width: 13px;
+  height: 13px;
+}
+
+.eq__error {
+  grid-column: 3 / 5;
+  margin: -4px 0 2px;
+  font-size: 12px;
+  color: var(--maroon);
+}
+
+.eq__error:empty {
+  display: none;
+}
+
+.eq-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+}
+
+.eq-actions .btn {
+  flex: 1;
+  font-weight: 700;
+}
+
+.graph-keys {
+  flex: 0 0 auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: clamp(34px, 6.2dvh, 48px);
+  gap: 3px;
+}
+
+.graph-keys .key {
+  font-size: clamp(1rem, 4.6vw, 1.3rem);
+}
+
+.graph-keys .key--fn,
+.graph-keys .key--equals {
+  font-size: clamp(0.85rem, 3.8vw, 1.05rem);
+}
+
+.graph-keys .key i {
+  font-family: "Times New Roman", serif;
+  font-size: 1.3em;
 }
 
 /* ---------- motion off ---------- */

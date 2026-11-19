@@ -1,5 +1,5 @@
 /**
- * Calculator controller.
+ * Calculator tab controller.
  *
  * The expression is a MathLive math-field: a structural editor where
  * fractions, powers and roots create slots you can move the cursor into.
@@ -10,14 +10,15 @@
 import { MathfieldElement, type Selector } from "mathlive";
 import {
   ANS_LATEX,
-  expandAns,
   CalcError,
   evaluate,
+  expandAns,
   prefersExact,
   toLatex,
   type Evaluation,
 } from "../engine/engine";
 import { SCIENCE_PAGES, mainBody, topRow, type AfterResult, type Key } from "./keypad";
+import { bindKeypad, createKeyButton } from "./keys";
 import {
   circleWipe,
   fadeThrough,
@@ -28,9 +29,18 @@ import {
   zoomClose,
   zoomOpen,
 } from "./motion";
-import { MAX_HISTORY, load, save, type HistoryEntry } from "./storage";
+import { MAX_HISTORY, load, save } from "./storage";
 
 type Phase = "edit" | "result" | "error";
+
+export interface CalculatorTab {
+  focus(): void;
+  renderHistory(): void;
+  /** False while the settings window is open. */
+  acceptsKeys(): boolean;
+  equals(): void;
+  clearAll(): void;
+}
 
 function must<T extends Element>(id: string): T {
   const element = document.getElementById(id);
@@ -57,7 +67,7 @@ function quietField(field: MathfieldElement): void {
   field.popoverPolicy = "off";
 }
 
-export function mountCalculator(): void {
+export function mountCalculator(showCalcTab: () => void): CalculatorTab {
   const input = must<MathfieldElement>("calc-input");
   const resultField = must<MathfieldElement>("calc-result");
   const display = must<HTMLElement>("display");
@@ -72,22 +82,14 @@ export function mountCalculator(): void {
   const copyButton = must<HTMLButtonElement>("btn-copy");
   const pasteButton = must<HTMLButtonElement>("btn-paste");
   const clearButton = must<HTMLButtonElement>("btn-clear");
-  const historyButton = must<HTMLButtonElement>("btn-history");
   const settingsWindow = must<HTMLDialogElement>("settings-window");
-  const historyWindow = must<HTMLDialogElement>("history-window");
   const historyList = must<HTMLUListElement>("history-list");
   const historyEmpty = must<HTMLElement>("history-empty");
   const clearHistoryButton = must<HTMLButtonElement>("clear-history");
-  const startButton = must<HTMLButtonElement>("start-button");
-  const startMenu = must<HTMLElement>("start-menu");
-  const trayAngle = must<HTMLButtonElement>("tray-angle");
-  const clock = must<HTMLElement>("clock");
-  const shutdown = must<HTMLElement>("shutdown");
 
   const saved = load();
   const settings = saved.settings;
-  const history: HistoryEntry[] = saved.history;
-  let ans: string | null = saved.ans;
+  const history = saved.history;
 
   let phase: Phase = "edit";
   let secondMode = false;
@@ -100,7 +102,6 @@ export function mountCalculator(): void {
   quietField(resultField);
   input.smartFence = false;
 
-  const persist = (): void => save({ settings, history, ans });
   const announce = (message: string): void => {
     announcer.textContent = message;
   };
@@ -127,8 +128,7 @@ export function mountCalculator(): void {
     if (!content) {
       return;
     }
-    const steps = [1, 0.86, 0.74, 0.64, 0.55];
-    for (const step of steps) {
+    for (const step of [1, 0.86, 0.74, 0.64, 0.55]) {
       field.style.setProperty("--fit", String(step));
       if (content.scrollWidth <= content.clientWidth + 1) {
         break;
@@ -148,11 +148,9 @@ export function mountCalculator(): void {
       return;
     }
     resultField.value = toLatex(evaluation, showingExact);
-    resultField.title =
-      evaluation.decimal !== null && evaluation.exact !== evaluation.decimal
-        ? "Tap to switch fraction / decimal"
-        : "";
-    display.classList.toggle("can-toggle", resultField.title !== "");
+    const canToggle = evaluation.decimal !== null && evaluation.exact !== evaluation.decimal;
+    resultField.title = canToggle ? "Tap to switch fraction / decimal" : "";
+    display.classList.toggle("can-toggle", canToggle);
     fitAll();
     if (animate) {
       riseIn(resultField);
@@ -162,7 +160,6 @@ export function mountCalculator(): void {
   function renderAngle(): void {
     const label = settings.angle.toUpperCase();
     angleChip.textContent = label;
-    trayAngle.textContent = label;
     angleChip.setAttribute("aria-label", `Angle unit: ${label}. Tap to switch.`);
     keypad.querySelectorAll<HTMLElement>('[data-action="angle"]').forEach((key) => {
       key.innerHTML = `<span class="key__label">${label}</span>`;
@@ -175,38 +172,14 @@ export function mountCalculator(): void {
   function toggleAngle(): void {
     settings.angle = settings.angle === "deg" ? "rad" : "deg";
     renderAngle();
-    persist();
+    save();
     announce(settings.angle === "deg" ? "Degrees" : "Radians");
   }
 
   // -- keypad --------------------------------------------------------------
 
-  function createKey(key: Key): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `key key--${key.variant ?? "num"}`;
-    button.innerHTML = `<span class="key__label">${key.label}</span>`;
-    button.setAttribute("aria-label", key.aria);
-    if (key.colSpan) {
-      button.style.gridColumn = `span ${key.colSpan}`;
-    }
-    if (key.rowSpan) {
-      button.style.gridRow = `span ${key.rowSpan}`;
-    }
-    if (key.action.type === "app") {
-      button.dataset.action = key.action.action;
-    }
-    if (key.repeat) {
-      button.dataset.repeat = "";
-    }
-    keyMap.set(button, key);
-    return button;
-  }
-
-  const keyMap = new WeakMap<HTMLElement, Key>();
-
   function renderTop(): void {
-    keypadTop.replaceChildren(...topRow(secondMode).map(createKey));
+    keypadTop.replaceChildren(...topRow(secondMode).map(createKeyButton));
     const second = keypadTop.querySelector<HTMLElement>('[data-action="second"]');
     second?.classList.toggle("is-on", secondMode);
     second?.setAttribute("aria-pressed", String(secondMode));
@@ -220,13 +193,13 @@ export function mountCalculator(): void {
     if (!secondMode) {
       const grid = document.createElement("div");
       grid.className = "keygrid";
-      grid.append(...mainBody(cursorMode).map(createKey));
+      grid.append(...mainBody(cursorMode).map(createKeyButton));
       keypadBody.replaceChildren(grid);
       return;
     }
 
     const tabs = document.createElement("div");
-    tabs.className = "tabs";
+    tabs.className = "subtabs";
     tabs.setAttribute("role", "tablist");
     const pages = document.createElement("div");
     pages.className = "pages";
@@ -234,7 +207,7 @@ export function mountCalculator(): void {
     SCIENCE_PAGES.forEach((page, index) => {
       const tab = document.createElement("button");
       tab.type = "button";
-      tab.className = "tab";
+      tab.className = "subtab";
       tab.textContent = page.title;
       tab.setAttribute("role", "tab");
       tab.addEventListener("click", () => {
@@ -246,13 +219,13 @@ export function mountCalculator(): void {
       grid.className = "keygrid page";
       grid.setAttribute("role", "tabpanel");
       grid.setAttribute("aria-label", page.title);
-      grid.append(...page.keys.map(createKey));
+      grid.append(...page.keys.map(createKeyButton));
       pages.append(grid);
     });
 
     const markTab = (): void => {
       sciPage = Math.round(pages.scrollLeft / Math.max(pages.clientWidth, 1));
-      tabs.querySelectorAll(".tab").forEach((tab, index) => {
+      tabs.querySelectorAll(".subtab").forEach((tab, index) => {
         tab.classList.toggle("is-active", index === sciPage);
         tab.setAttribute("aria-selected", String(index === sciPage));
       });
@@ -265,11 +238,6 @@ export function mountCalculator(): void {
       markTab();
     });
     renderAngle();
-  }
-
-  function renderKeypad(): void {
-    renderTop();
-    renderBody();
   }
 
   function setSecond(on: boolean): void {
@@ -333,16 +301,16 @@ export function mountCalculator(): void {
       return;
     }
     try {
-      evaluation = evaluate(latex, settings.angle, ans);
+      evaluation = evaluate(latex, settings.angle, saved.ans);
       showingExact = prefersExact(evaluation, settings.format);
       history.unshift({
-        latex: expandAns(latex, ans),
+        latex: expandAns(latex, saved.ans),
         exact: evaluation.exact,
         decimal: evaluation.decimal,
       });
-      ans = evaluation.exact;
       history.splice(MAX_HISTORY);
-      persist();
+      saved.ans = evaluation.exact;
+      save();
       phase = "result";
       display.dataset.phase = "result";
       errorEl.textContent = "";
@@ -369,9 +337,6 @@ export function mountCalculator(): void {
 
   function runKey(key: Key): void {
     const { action } = key;
-    if (navigator.vibrate) {
-      navigator.vibrate(6);
-    }
 
     if (action.type === "insert") {
       insert(action.latex, action.after);
@@ -410,7 +375,7 @@ export function mountCalculator(): void {
         smartParen();
         break;
       case "ans":
-        if (!ans) {
+        if (!saved.ans) {
           shake(display);
           return;
         }
@@ -425,72 +390,22 @@ export function mountCalculator(): void {
       case "backspace":
         backspace();
         break;
+      case "done":
+        break;
     }
   }
 
-  // Press feedback (AN-06) and hold-to-repeat, via pointer events.
-  let repeatTimer = 0;
-  let suppressClick: HTMLElement | null = null;
-
-  const stopRepeat = (): void => {
-    window.clearTimeout(repeatTimer);
-    window.clearInterval(repeatTimer);
-  };
-
-  keypad.addEventListener("pointerdown", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(".key");
-    if (!button) {
-      return;
-    }
-    event.preventDefault(); // keep focus (and the caret) in the math-field
-    button.classList.add("is-down");
-    const key = keyMap.get(button);
-    if (key?.repeat) {
-      runKey(key);
-      suppressClick = button;
-      stopRepeat();
-      repeatTimer = window.setTimeout(() => {
-        repeatTimer = window.setInterval(() => runKey(key), 70);
-      }, 420);
-    }
-  });
-
-  const release = (event: PointerEvent): void => {
-    stopRepeat();
-    for (const button of keypad.querySelectorAll(".is-down")) {
-      if (event.type !== "pointerleave" || button === event.target) {
-        button.classList.remove("is-down");
-      }
-    }
-  };
-  for (const type of ["pointerup", "pointercancel"] as const) {
-    window.addEventListener(type, release);
-  }
-  keypad.addEventListener("pointerleave", release);
-
-  keypad.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(".key");
-    if (!button) {
-      return;
-    }
-    if (suppressClick === button) {
-      suppressClick = null;
-      return;
-    }
-    const key = keyMap.get(button);
-    if (key) {
-      runKey(key);
-    }
-  });
+  bindKeypad(keypad, runKey);
 
   // -- toolbar -------------------------------------------------------------
 
   async function copy(): Promise<void> {
     let text = "";
     if (phase === "result" && evaluation) {
-      text = showingExact || evaluation.decimal === null
-        ? resultField.getValue("ascii-math")
-        : evaluation.decimal;
+      text =
+        showingExact || evaluation.decimal === null
+          ? resultField.getValue("ascii-math")
+          : evaluation.decimal;
     } else {
       text = input.getValue("ascii-math");
     }
@@ -536,7 +451,6 @@ export function mountCalculator(): void {
   });
   clearEntry.addEventListener("click", clearAll);
   angleChip.addEventListener("click", toggleAngle);
-  trayAngle.addEventListener("click", toggleAngle);
 
   // Tap the result to flip between fraction and decimal.
   display.addEventListener("click", (event) => {
@@ -550,86 +464,38 @@ export function mountCalculator(): void {
     void fadeThrough(resultField, () => showResult(false));
   });
 
-  // -- windows -------------------------------------------------------------
+  // -- settings window ---------------------------------------------------------
 
-  function openWindow(win: HTMLDialogElement, origin?: HTMLElement): void {
-    closeStartMenu();
-    if (win.open) {
+  async function closeSettings(): Promise<void> {
+    await zoomClose(settingsWindow);
+    settingsWindow.close();
+  }
+
+  settingsButton.addEventListener("click", () => {
+    if (settingsWindow.open) {
       return;
     }
-    win.showModal();
-    zoomOpen(win, origin?.getBoundingClientRect());
-  }
-
-  async function closeWindow(win: HTMLDialogElement): Promise<void> {
-    await zoomClose(win);
-    win.close();
-  }
-
-  for (const win of [settingsWindow, historyWindow]) {
-    win.querySelectorAll<HTMLElement>("[data-close]").forEach((button) =>
-      button.addEventListener("click", () => void closeWindow(win)),
-    );
-    // Click on the backdrop closes.
-    win.addEventListener("click", (event) => {
-      if (event.target === win) {
-        void closeWindow(win);
-      }
-    });
-    win.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      void closeWindow(win);
-    });
-    win.addEventListener("close", () => {
-      win.getAnimations().forEach((animation) => animation.cancel());
-      focusInput();
-    });
-  }
-
-  function renderHistory(): void {
-    historyList.replaceChildren(
-      ...history.map((entry) => {
-        const item = document.createElement("li");
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "history__row";
-        const shownResult =
-          entry.decimal !== null && !prefersExact({ ...entry, value: 0 }, settings.format)
-            ? toLatex({ ...entry, value: 0 }, false)
-            : entry.exact;
-        button.append(
-          renderMath(entry.latex, "history__expr"),
-          renderMath(`=${shownResult}`, "history__result"),
-        );
-        button.addEventListener("click", () => {
-          input.value = entry.latex;
-          setPhase("edit");
-          void closeWindow(historyWindow);
-        });
-        item.append(button);
-        return item;
-      }),
-    );
-    historyEmpty.hidden = history.length > 0;
-    clearHistoryButton.disabled = history.length === 0;
-  }
-
-  function openHistory(origin: HTMLElement): void {
-    renderHistory();
-    openWindow(historyWindow, origin);
-    staggerIn(historyList.children);
-  }
-
-  historyButton.addEventListener("click", () => openHistory(historyButton));
-  settingsButton.addEventListener("click", () => openWindow(settingsWindow, settingsButton));
-
-  clearHistoryButton.addEventListener("click", () => {
-    history.length = 0;
-    persist();
-    renderHistory();
+    syncSettingsForm();
+    settingsWindow.showModal();
+    zoomOpen(settingsWindow, settingsButton.getBoundingClientRect());
+  });
+  settingsWindow.querySelectorAll<HTMLElement>("[data-close]").forEach((button) =>
+    button.addEventListener("click", () => void closeSettings()),
+  );
+  settingsWindow.addEventListener("click", (event) => {
+    if (event.target === settingsWindow) {
+      void closeSettings();
+    }
+  });
+  settingsWindow.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    void closeSettings();
+  });
+  settingsWindow.addEventListener("close", () => {
+    settingsWindow.getAnimations().forEach((animation) => animation.cancel());
+    focusInput();
   });
 
-  // Settings form.
   settingsWindow.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement;
     if (target.name === "angle") {
@@ -645,7 +511,7 @@ export function mountCalculator(): void {
       settings.animations = target.checked;
       applyMotion();
     }
-    persist();
+    save();
   });
 
   function syncSettingsForm(): void {
@@ -663,62 +529,42 @@ export function mountCalculator(): void {
     document.documentElement.dataset.motion = settings.animations ? "on" : "off";
   }
 
-  // -- taskbar -------------------------------------------------------------
+  // -- history page ------------------------------------------------------------
 
-  function closeStartMenu(): void {
-    startMenu.hidden = true;
-    startButton.classList.remove("is-on");
-    startButton.setAttribute("aria-expanded", "false");
+  function renderHistory(): void {
+    historyList.replaceChildren(
+      ...history.map((entry) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "history__row";
+        const asEvaluation = { ...entry, value: 0 };
+        const shownResult = toLatex(asEvaluation, prefersExact(asEvaluation, settings.format));
+        button.append(
+          renderMath(entry.latex, "history__expr"),
+          renderMath(`=${shownResult}`, "history__result"),
+        );
+        button.setAttribute("aria-label", "Use this calculation again");
+        button.addEventListener("click", () => {
+          input.value = entry.latex;
+          setPhase("edit");
+          showCalcTab();
+          focusInput();
+        });
+        item.append(button);
+        return item;
+      }),
+    );
+    historyEmpty.hidden = history.length > 0;
+    clearHistoryButton.disabled = history.length === 0;
+    staggerIn(historyList.children);
   }
 
-  startButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const opening = startMenu.hidden !== false;
-    startMenu.hidden = !opening;
-    startButton.classList.toggle("is-on", opening);
-    startButton.setAttribute("aria-expanded", String(opening));
-    if (opening) {
-      staggerIn(startMenu.querySelectorAll(".start-menu__item"));
-    }
+  clearHistoryButton.addEventListener("click", () => {
+    history.length = 0;
+    save();
+    renderHistory();
   });
-
-  startMenu.addEventListener("click", (event) => {
-    const item = (event.target as HTMLElement).closest<HTMLElement>("[data-menu]");
-    if (!item) {
-      return;
-    }
-    const choice = item.dataset.menu;
-    closeStartMenu();
-    if (choice === "history") {
-      openHistory(startButton);
-    } else if (choice === "settings") {
-      openWindow(settingsWindow, startButton);
-    } else if (choice === "shutdown") {
-      shutdown.hidden = false;
-      shutdown.focus();
-    }
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!startMenu.hidden && !(event.target as HTMLElement).closest("#start-menu")) {
-      closeStartMenu();
-    }
-  });
-
-  shutdown.addEventListener("click", () => {
-    shutdown.hidden = true;
-    const win = document.querySelector<HTMLElement>(".calc");
-    if (win) {
-      zoomOpen(win);
-    }
-    focusInput();
-  });
-
-  function tick(): void {
-    clock.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-  tick();
-  window.setInterval(tick, 15_000);
 
   // -- keyboard ------------------------------------------------------------
 
@@ -746,24 +592,9 @@ export function mountCalculator(): void {
 
   input.addEventListener("input", fitAll);
 
-  document.addEventListener("keydown", (event) => {
-    const anyWindowOpen = settingsWindow.open || historyWindow.open;
-    if (event.key === "Enter" && !anyWindowOpen) {
-      const target = event.target as HTMLElement;
-      if (target.closest("button") && target !== input) {
-        return;
-      }
-      event.preventDefault();
-      equals();
-    } else if (event.key === "Escape" && !anyWindowOpen) {
-      clearAll();
-    }
-  });
-
   // Our own buttons must not steal focus from the math-field.
-  document.addEventListener("mousedown", (event) => {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest(".toolbar, .display button, .taskbar")) {
+  document.getElementById("page-calc")?.addEventListener("mousedown", (event) => {
+    if ((event.target as HTMLElement).closest(".toolbar, .display button")) {
       event.preventDefault();
     }
   });
@@ -772,18 +603,24 @@ export function mountCalculator(): void {
 
   applyMotion();
   syncSettingsForm();
-  renderKeypad();
+  renderTop();
+  renderBody();
   renderAngle();
   setPhase("edit");
 
-  // The window "opens" on launch.
-  const calcWindow = document.querySelector<HTMLElement>(".calc");
-  if (calcWindow) {
-    zoomOpen(calcWindow);
-  }
-
-  // Desktop convenience; on touch devices we keep the OS keyboard away.
-  if (!window.matchMedia("(pointer: coarse)").matches) {
-    focusInput();
-  }
+  return {
+    focus(): void {
+      // On touch devices focusing would do nothing useful; on desktop it lets you type.
+      if (!window.matchMedia("(pointer: coarse)").matches) {
+        focusInput();
+      }
+      fitAll();
+    },
+    renderHistory,
+    acceptsKeys(): boolean {
+      return !settingsWindow.open;
+    },
+    equals,
+    clearAll,
+  };
 }

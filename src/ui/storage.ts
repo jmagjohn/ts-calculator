@@ -1,4 +1,4 @@
-/** Settings and history survive reloads via localStorage (best effort). */
+/** Settings, history and graph equations survive reloads via localStorage (best effort). */
 
 import type { AngleMode, ResultFormat } from "../engine/engine";
 
@@ -17,41 +17,74 @@ export interface HistoryEntry {
   decimal: string | null;
 }
 
-const KEY = "calc95:v1";
-export const MAX_HISTORY = 50;
+export interface SavedEquation {
+  latex: string;
+  visible: boolean;
+}
 
-interface Saved {
+export type TabName = "calc" | "graph" | "3d" | "history";
+
+export interface Saved {
   settings: Settings;
   history: HistoryEntry[];
   ans: string | null;
+  graph2d: SavedEquation[];
+  graph3d: SavedEquation[];
+  tab: TabName;
 }
+
+const KEY = "calc95:v1";
+export const MAX_HISTORY = 50;
 
 const DEFAULTS: Saved = {
   settings: { angle: "deg", format: "auto", animations: true },
   history: [],
   ans: null,
+  graph2d: [
+    { latex: "y=\\sin(x)", visible: true },
+    { latex: "x^2+y^2=9", visible: true },
+  ],
+  graph3d: [{ latex: "\\sin(x)\\cos(y)", visible: true }],
+  tab: "calc",
 };
 
-export function load(): Saved {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) {
-      return structuredClone(DEFAULTS);
-    }
-    const saved = JSON.parse(raw) as Partial<Saved>;
-    return {
-      settings: { ...DEFAULTS.settings, ...saved.settings },
-      history: Array.isArray(saved.history) ? saved.history.slice(0, MAX_HISTORY) : [],
-      ans: typeof saved.ans === "string" ? saved.ans : null,
-    };
-  } catch {
-    return structuredClone(DEFAULTS);
+function equations(value: unknown, fallback: SavedEquation[]): SavedEquation[] {
+  if (!Array.isArray(value)) {
+    return structuredClone(fallback);
   }
+  return value
+    .filter((item): item is SavedEquation => typeof item?.latex === "string")
+    .map((item) => ({ latex: item.latex, visible: item.visible !== false }));
 }
 
-export function save(state: Saved): void {
+let state: Saved | null = null;
+
+/** The shared, mutable saved state. Call save() after changing it. */
+export function load(): Saved {
+  if (state) {
+    return state;
+  }
+  let saved: Partial<Saved> = {};
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Saved>;
+  } catch {
+    saved = {};
+  }
+  const tabs: TabName[] = ["calc", "graph", "3d", "history"];
+  state = {
+    settings: { ...DEFAULTS.settings, ...saved.settings },
+    history: Array.isArray(saved.history) ? saved.history.slice(0, MAX_HISTORY) : [],
+    ans: typeof saved.ans === "string" ? saved.ans : null,
+    graph2d: equations(saved.graph2d, DEFAULTS.graph2d),
+    graph3d: equations(saved.graph3d, DEFAULTS.graph3d),
+    tab: tabs.includes(saved.tab as TabName) ? (saved.tab as TabName) : "calc",
+  };
+  return state;
+}
+
+export function save(): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(load()));
   } catch {
     // Private mode or storage full: the calculator still works, it just forgets.
   }
