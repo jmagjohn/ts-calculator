@@ -143,11 +143,13 @@ export function mountGraph(
           element.classList.add("is-active");
           setKeypad(true);
         };
-        // MathLive focuses an element inside its shadow root, so listen to
-        // every signal: focus events and the tap itself.
+        // Open the keypad on the tap itself, in the capture phase, so the
+        // layout has already moved the field up before MathLive focuses it.
+        // Otherwise iOS Safari scrolls the page to reveal a field near the
+        // bottom, and taps then land about a centimetre off.
+        field.addEventListener("pointerdown", activate, { capture: true });
         field.addEventListener("focus", activate);
         field.addEventListener("focusin", activate);
-        field.addEventListener("pointerdown", activate);
 
         const remove = document.createElement("button");
         remove.type = "button";
@@ -204,9 +206,9 @@ export function mountGraph(
         { duration: 360, easing: "cubic-bezier(.2,.8,.2,1)" },
       );
     }
+    row.field.dispatchEvent(new Event("pointerdown"));
     row.field.focus();
     row.field.position = row.field.lastOffset;
-    row.field.dispatchEvent(new Event("pointerdown"));
     persist();
   });
 
@@ -243,8 +245,8 @@ export function mountGraph(
     if (keypad.hidden) {
       const target = active ?? rows[rows.length - 1]?.field;
       if (target) {
-        target.focus();
         target.dispatchEvent(new Event("pointerdown"));
+        target.focus();
       } else {
         setKeypad(true);
       }

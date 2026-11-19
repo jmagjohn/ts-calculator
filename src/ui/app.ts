@@ -15,7 +15,30 @@ const TITLES: Record<TabName, string> = {
   history: "History",
 };
 
+/**
+ * The app fills the screen and never scrolls. If the browser scrolls anyway
+ * (iOS does, to reveal a focused field), snap back so what you see and where
+ * your finger lands stay lined up.
+ */
+function pinViewport(): void {
+  const reset = (): void => {
+    if (window.scrollX !== 0 || window.scrollY !== 0) {
+      window.scrollTo(0, 0);
+    }
+  };
+  window.addEventListener("scroll", reset, { passive: true });
+  window.visualViewport?.addEventListener("scroll", reset);
+  window.visualViewport?.addEventListener("resize", reset);
+  // iOS scrolls a moment after focus, so check again shortly after.
+  document.addEventListener("focusin", () => {
+    for (const delay of [0, 80, 300]) {
+      window.setTimeout(reset, delay);
+    }
+  });
+}
+
 export function mountApp(): void {
+  pinViewport();
   const state = load();
   const title = document.getElementById("window-title");
   const content = document.getElementById("window-content") as HTMLElement;

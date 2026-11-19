@@ -30,6 +30,10 @@ export function createKeyButton(key: Key): HTMLButtonElement {
 export function bindKeypad(container: HTMLElement, run: (key: Key) => void): void {
   let repeatTimer = 0;
   let suppressClick: HTMLElement | null = null;
+  /** The key the current touch started on. A tap only counts on that key, so
+   *  a finger that lands elsewhere (e.g. while the layout shifts as a keypad
+   *  opens) and lifts over a key does not press it. */
+  let downOn: HTMLElement | null = null;
 
   const stopRepeat = (): void => {
     window.clearTimeout(repeatTimer);
@@ -50,6 +54,7 @@ export function bindKeypad(container: HTMLElement, run: (key: Key) => void): voi
       return;
     }
     event.preventDefault(); // keep focus (and the caret) in the math-field
+    downOn = button;
     button.classList.add("is-down");
     if (key.repeat) {
       press(key);
@@ -78,6 +83,12 @@ export function bindKeypad(container: HTMLElement, run: (key: Key) => void): voi
     }
     if (suppressClick === button) {
       suppressClick = null;
+      return;
+    }
+    // detail === 0 is a keyboard activation (Enter/Space), which has no touch.
+    const startedHere = event.detail === 0 || downOn === button;
+    downOn = null;
+    if (!startedHere) {
       return;
     }
     press(key);

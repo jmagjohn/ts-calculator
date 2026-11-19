@@ -38,11 +38,16 @@
 html,
 body {
   height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
+/* Pinned: the page must never scroll. iOS Safari scrolls the page to reveal a
+   focused field, and with a fixed layout that leaves taps landing off target. */
 body {
+  position: fixed;
+  inset: 0;
   margin: 0;
-  overflow: hidden;
   background: var(--desktop);
   color: var(--ink);
   font-family: var(--font);
