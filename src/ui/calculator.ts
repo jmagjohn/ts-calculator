@@ -11,11 +11,12 @@ import { MathfieldElement, type Selector } from "mathlive";
 import {
   ANS_LATEX,
   CalcError,
-  evaluate,
+  calculate,
   expandAns,
-  prefersExact,
+    prefersExact,
+  solutionsLatex,
   toLatex,
-  type Evaluation,
+  type Outcome,
 } from "../engine/engine";
 import { SCIENCE_PAGES, mainBody, topRow, type AfterResult, type Key } from "./keypad";
 import { bindKeypad, createKeyButton } from "./keys";
@@ -72,6 +73,8 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
   const resultField = must<MathfieldElement>("calc-result");
   const display = must<HTMLElement>("display");
   const errorEl = must<HTMLElement>("calc-error");
+  const approxEl = must<HTMLElement>("calc-approx");
+  const screen = must<HTMLElement>("display-screen");
   const announcer = must<HTMLElement>("calc-announcer");
   const angleChip = must<HTMLButtonElement>("angle-chip");
   const clearEntry = must<HTMLButtonElement>("clear-entry");
@@ -93,9 +96,8 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
 
   let phase: Phase = "edit";
   let secondMode = false;
-  let cursorMode = false;
   let sciPage = 0;
-  let evaluation: Evaluation | null = null;
+  let outcome: Outcome | null = null;
   let showingExact = true;
 
   quietField(input);
@@ -115,42 +117,112 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
     if (next !== "error") {
       errorEl.textContent = "";
     }
-    if (next === "edit") {
+    if (next !== "result") {
       resultField.value = "";
-      evaluation = null;
+      approxEl.textContent = "";
+      outcome = null;
+      display.classList.remove("can-toggle");
     }
     fitAll();
   }
 
-  /** Shrink long expressions so they fit, down to a floor, then scroll. */
-  function fit(field: MathfieldElement): void {
-    const content = field.shadowRoot?.querySelector<HTMLElement>("[part=content]");
-    if (!content) {
+  /**
+   * Scale a field's math to fit both its width and `maxHeight`, down to a
+   * floor. The rendered math is measured directly: MathLive right-aligns it,
+   * so overflow spills to the left where scrollWidth never sees it. If it
+   * still does not fit, it is left-aligned so MathLive can scroll to the caret.
+   */
+  function fit(field: MathfieldElement, maxHeight: number): void {
+    const root = field.shadowRoot;
+    const latex = root?.querySelector<HTMLElement>(".ML__latex");
+    const content = root?.querySelector<HTMLElement>("[part=content]");
+    if (!latex || !content) {
       return;
     }
-    for (const step of [1, 0.86, 0.74, 0.64, 0.55]) {
-      field.style.setProperty("--fit", String(step));
-      if (content.scrollWidth <= content.clientWidth + 1) {
-        break;
-      }
+    field.style.setProperty("--fit", "1");
+    const natural = latex.getBoundingClientRect();
+    const width = content.clientWidth - 6;
+    if (natural.width === 0 || width <= 0) {
+      field.classList.remove("is-overflowing");
+      return;
     }
+    const factor = Math.max(0.42, Math.min(1, width / natural.width, maxHeight / natural.height));
+    field.style.setProperty("--fit", factor.toFixed(3));
+    field.classList.toggle("is-overflowing", natural.width * factor > width + 1);
   }
 
   function fitAll(): void {
     requestAnimationFrame(() => {
-      fit(input);
-      fit(resultField);
+      const height = screen.clientHeight;
+      if (phase === "result") {
+        fit(input, height * 0.32);
+        const used = input.offsetHeight + (approxEl.textContent ? approxEl.offsetHeight : 0);
+        fit(resultField, Math.max(height - used - 6, 24));
+      } else {
+        fit(input, height - (phase === "error" ? errorEl.offsetHeight + 4 : 0));
+      }
     });
   }
 
+  function canToggle(): boolean {
+    if (outcome?.kind === "value") {
+      const { result } = outcome;
+      return result.decimal !== null && result.exact !== result.decimal;
+    }
+    if (outcome?.kind === "solutions" && !outcome.approximate) {
+      return outcome.solutions.some((s) => s.decimal !== null && s.exact !== s.decimal);
+    }
+    return false;
+  }
+
+  function resultLatex(exact: boolean): string {
+    if (!outcome) {
+      return "";
+    }
+    if (outcome.kind === "value") {
+      return toLatex(outcome.result, exact);
+    }
+    if (outcome.kind === "solutions") {
+      return solutionsLatex(outcome.variable, outcome.solutions, exact, outcome.approximate);
+    }
+    return outcome.value ? "\\text{True}" : "\\text{False}";
+  }
+
+  function preferExact(): boolean {
+    if (outcome?.kind === "value") {
+      return prefersExact(outcome.result, settings.format);
+    }
+    if (outcome?.kind === "solutions") {
+      return outcome.solutions.every((s) => prefersExact(s, settings.format));
+    }
+    return true;
+  }
+
+  /** Small "≈ 0.3333" line under an exact answer. */
+  function approxText(): string {
+    if (!showingExact || !canToggle() || !outcome) {
+      return "";
+    }
+    const show = (decimal: string | null): string =>
+      decimal === null ? "?" : formatGrouped(decimal);
+    if (outcome.kind === "value") {
+      return `≈ ${show(outcome.result.decimal)}`;
+    }
+    if (outcome.kind === "solutions") {
+      return `${outcome.variable} ≈ ${outcome.solutions.map((s) => show(s.decimal)).join(",  ")}`;
+    }
+    return "";
+  }
+
   function showResult(animate: boolean): void {
-    if (!evaluation) {
+    if (!outcome) {
       return;
     }
-    resultField.value = toLatex(evaluation, showingExact);
-    const canToggle = evaluation.decimal !== null && evaluation.exact !== evaluation.decimal;
-    resultField.title = canToggle ? "Tap to switch fraction / decimal" : "";
-    display.classList.toggle("can-toggle", canToggle);
+    resultField.value = resultLatex(showingExact);
+    approxEl.textContent = approxText();
+    const toggles = canToggle();
+    resultField.title = toggles ? "Tap to switch fraction / decimal" : "";
+    display.classList.toggle("can-toggle", toggles);
     fitAll();
     if (animate) {
       riseIn(resultField);
@@ -183,9 +255,6 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
     const second = keypadTop.querySelector<HTMLElement>('[data-action="second"]');
     second?.classList.toggle("is-on", secondMode);
     second?.setAttribute("aria-pressed", String(secondMode));
-    const cursor = keypadTop.querySelector<HTMLElement>('[data-action="cursor"]');
-    cursor?.classList.toggle("is-on", cursorMode);
-    cursor?.setAttribute("aria-pressed", String(cursorMode));
   }
 
   function renderBody(): void {
@@ -193,7 +262,7 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
     if (!secondMode) {
       const grid = document.createElement("div");
       grid.className = "keygrid";
-      grid.append(...mainBody(cursorMode).map(createKeyButton));
+      grid.append(...mainBody().map(createKeyButton));
       keypadBody.replaceChildren(grid);
       return;
     }
@@ -282,7 +351,10 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
       .trim();
     const opens = (before.match(/\(/g) ?? []).length;
     const closes = (before.match(/\)/g) ?? []).length;
-    const valueBefore = /([\d.)}!%]|\\pi|e|Ans\}|\\degree)$/.test(before);
+    // A value (digit, variable, constant, closing bracket) before the caret
+    // means "close"; a function name like \\sin or an operator means "open".
+    const valueBefore =
+      !/\\(?!pi$|degree$)[a-zA-Z]+$/.test(before) && /([\w.)}!%]|\\pi|\\degree)$/.test(before);
     insert(opens > closes && valueBefore ? ")" : "(", "fresh");
   }
 
@@ -301,26 +373,36 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
       return;
     }
     try {
-      evaluation = evaluate(latex, settings.angle, saved.ans);
-      showingExact = prefersExact(evaluation, settings.format);
-      history.unshift({
-        latex: expandAns(latex, saved.ans),
-        exact: evaluation.exact,
-        decimal: evaluation.decimal,
-      });
+      outcome = calculate(latex, settings.angle, saved.ans);
+      showingExact = preferExact();
+      const shown = resultLatex(showingExact);
+      if (outcome.kind === "value") {
+        history.unshift({
+          latex: expandAns(latex, saved.ans),
+          exact: outcome.result.exact,
+          decimal: outcome.result.decimal,
+        });
+        saved.ans = outcome.result.exact;
+      } else {
+        history.unshift({ latex: expandAns(latex, saved.ans), exact: shown, decimal: null, shown });
+        if (outcome.kind === "solutions" && outcome.solutions[0]) {
+          saved.ans = outcome.solutions[0].exact;
+        }
+      }
       history.splice(MAX_HISTORY);
-      saved.ans = evaluation.exact;
       save();
       phase = "result";
       display.dataset.phase = "result";
       errorEl.textContent = "";
       showResult(true);
-      announce(`Equals ${evaluation.decimal ?? resultField.getValue("spoken-text")}`);
+      announce(resultField.getValue("spoken-text"));
     } catch (error) {
       const message = error instanceof CalcError ? error.message : "Error";
       phase = "error";
       display.dataset.phase = "error";
+      outcome = null;
       resultField.value = "";
+      approxEl.textContent = "";
       errorEl.textContent = message;
       shake(display);
       announce(message);
@@ -359,15 +441,6 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
       case "second":
         setSecond(!secondMode);
         break;
-      case "cursor":
-        cursorMode = !cursorMode;
-        renderTop();
-        if (secondMode) {
-          setSecond(false);
-        } else {
-          void fadeThrough(keypadBody, renderBody);
-        }
-        break;
       case "equals":
         equals();
         break;
@@ -401,11 +474,11 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
 
   async function copy(): Promise<void> {
     let text = "";
-    if (phase === "result" && evaluation) {
+    if (phase === "result" && outcome) {
       text =
-        showingExact || evaluation.decimal === null
-          ? resultField.getValue("ascii-math")
-          : evaluation.decimal;
+        outcome.kind === "value" && !showingExact && outcome.result.decimal !== null
+          ? outcome.result.decimal
+          : resultField.getValue("ascii-math");
     } else {
       text = input.getValue("ascii-math");
     }
@@ -454,7 +527,7 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
 
   // Tap the result to flip between fraction and decimal.
   display.addEventListener("click", (event) => {
-    if (phase !== "result" || !evaluation || !display.classList.contains("can-toggle")) {
+    if (phase !== "result" || !outcome || !canToggle()) {
       return;
     }
     if (!(event.target as HTMLElement).closest("#calc-result")) {
@@ -503,8 +576,8 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
       renderAngle();
     } else if (target.name === "format") {
       settings.format = target.value as typeof settings.format;
-      if (evaluation) {
-        showingExact = prefersExact(evaluation, settings.format);
+      if (outcome) {
+        showingExact = preferExact();
         showResult(false);
       }
     } else if (target.name === "animations") {
@@ -542,7 +615,7 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
         const shownResult = toLatex(asEvaluation, prefersExact(asEvaluation, settings.format));
         button.append(
           renderMath(entry.latex, "history__expr"),
-          renderMath(`=${shownResult}`, "history__result"),
+          renderMath(entry.shown ?? `=${shownResult}`, "history__result"),
         );
         button.setAttribute("aria-label", "Use this calculation again");
         button.addEventListener("click", () => {
@@ -623,4 +696,14 @@ export function mountCalculator(showCalcTab: () => void): CalculatorTab {
     equals,
     clearAll,
   };
+}
+
+/** "1234567.5" -> "1,234,567.5"; "1.5e-7" -> "1.5 × 10^-7"; minus as U+2212. */
+function formatGrouped(decimal: string): string {
+  const [mantissa, exponent] = decimal.split("e");
+  const negative = mantissa.startsWith("-");
+  const [whole, fraction] = mantissa.replace("-", "").split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const text = `${negative ? "−" : ""}${grouped}${fraction ? `.${fraction}` : ""}`;
+  return exponent === undefined ? text : `${text} × 10^${Number(exponent)}`;
 }

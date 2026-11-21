@@ -26,30 +26,40 @@ display, square corners and Tahoma. Property-sheet tabs switch between
 
 ## Buttons
 
-The layout follows a classic phone scientific calculator:
+Five columns, modelled on a phone scientific calculator:
 
 | Row | Keys |
 | --- | --- |
 | Toolbar | `Settings` `Copy` `Paste` `Clear` |
-| Top | `2nd` · smart `( )` · `%` · cursor-keys toggle |
-| Body | fraction `÷` `×` `⌫` / `7 8 9 −` / `4 5 6 +` / `1 2 3 =` / `0 .` |
+| Top | `2nd` · smart `( )` · `%` · `◀` `▶` |
+| Body | fraction `xⁿ` `√` `x` `=` / `7 8 9 ÷ ⌫` / `4 5 6 × −` / `1 2 3 +` **ENTER** / `0 .` `Ans` |
 
+- **`=` is a symbol you type**, so you can write equations. **ENTER** does the
+  work:
+  - no `=`: evaluates (or simplifies: `x + x` → `2x`)
+  - an `=` and a letter: solves for it (x if present): `2x+3=11` → `x = 4`,
+    `x²−5x+6=0` → `x = 2, 3`, `x² = 2` → `x = −√2, √2`. Complex roots are
+    dropped. Equations algebra can't crack (`cos x = x`) are solved by a
+    numeric search and shown with ≈.
+  - an `=` and no letters: says True or False.
+- **`◀ ▶`** move through fractions, powers and roots (hold to repeat).
 - **`2nd`** swaps the body for a tabbed scientific panel (swipe or tap the
-  tabs): √, x², ⁿ√, xⁿ, x⁻¹, x!, nCr, nPr, ln, e, eˣ, π, log, log₂, logₓ, 10ˣ,
-  1/x, 2ˣ, |x|, Ans, and sin/cos/tan, their inverses, hyperbolic functions,
-  sec/csc/cot, °, ∛, and a DEG/RAD switch. The top row becomes `( ) E`.
+  tabs): x², ⁿ√, x⁻¹, x!, E, nCr, nPr, ln, e, eˣ, log, log₂, logₓ, 10ˣ, π, 1/x,
+  2ˣ, |x|, ∛, y, and sin/cos/tan, their inverses, hyperbolic functions,
+  sec/csc/cot, °, x³ and a DEG/RAD switch.
 - **`( )`** opens a bracket, or closes one when a bracket is open and a value
   comes before the cursor.
-- **Cursor toggle** adds ◀ ▶ keys (hold to repeat) for moving through
-  fractions, powers and roots. `⌫` also repeats while held.
-- **After `=`**: a digit or function starts a new calculation; an operator
+- **After ENTER**: a digit or function starts a new calculation; an operator
   continues from `Ans`.
-- **Tap the answer** to flip between fraction and decimal.
+- **Exact answers** show a small `≈ decimal` line underneath; tap the answer to
+  flip between fraction and decimal. Fractions with big numbers show as
+  decimals.
+- Long expressions shrink to fit the display (width and height) and, past a
+  minimum size, scroll with the cursor instead of being cut off.
 - **Settings**: degrees/radians, answer format (auto / exact / decimal),
   animations on or off. Settings and the last 50 calculations are saved on
   the device.
-- Nothing is calculated until you press `=`. Enter evaluates and Escape clears
-  on a physical keyboard.
+- On a physical keyboard Enter is ENTER and Escape clears.
 
 ## Graphing
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decimalToLatex, evaluate, expandAns, formatNumber, isTidyExact, prefersExact, toLatex } from "./engine";
+import { calculate, decimalToLatex, evaluate, expandAns, findRoots, solutionsLatex, formatNumber, isTidyExact, prefersExact, toLatex } from "./engine";
 
 describe("evaluate", () => {
   it("parses LaTeX and evaluates arithmetic", () => {
@@ -94,5 +94,78 @@ describe("expandAns", () => {
     expect(expandAns("\\mathrm{Ans}\\times2", "14")).toBe("14\\times2");
     expect(expandAns("\\mathrm{Ans}\\times2", "1+\\sqrt{2}")).toBe("\\left(1+\\sqrt{2}\\right)\\times2");
     expect(expandAns("3+4", "14")).toBe("3+4");
+  });
+});
+
+describe("calculate", () => {
+  const solve = (latex: string, angle: "deg" | "rad" = "rad") => {
+    const outcome = calculate(latex, angle);
+    if (outcome.kind !== "solutions") {
+      throw new Error(`expected solutions, got ${outcome.kind}`);
+    }
+    return outcome;
+  };
+
+  it("evaluates plain expressions", () => {
+    const outcome = calculate("2+3");
+    expect(outcome.kind === "value" && outcome.result.decimal).toBe("5");
+  });
+
+  it("solves linear and quadratic equations exactly", () => {
+    expect(solve("2x+3=11").solutions.map((s) => s.exact)).toEqual(["4"]);
+    expect(solve("x^2-5x+6=0").solutions.map((s) => s.exact)).toEqual(["2", "3"]);
+    expect(solve("x^2=2").solutions.map((s) => s.exact)).toEqual(["-\\sqrt{2}", "\\sqrt{2}"]);
+  });
+
+  it("solves for whatever letter is used", () => {
+    const outcome = solve("a+3=7");
+    expect(outcome.variable).toBe("a");
+    expect(outcome.solutions[0].exact).toBe("4");
+  });
+
+  it("drops complex roots", () => {
+    expect(solve("x^3=8").solutions.map((s) => s.exact)).toEqual(["2"]);
+    expect(() => calculate("x^2+1=0")).toThrow(/no real solution/i);
+  });
+
+  it("solves trig equations in degrees", () => {
+    expect(solve("\\sin(x)=0.5", "deg").solutions.map((s) => s.decimal)).toEqual(["30", "150"]);
+  });
+
+  it("falls back to a numeric search", () => {
+    const outcome = solve("\\cos(x)=x");
+    expect(outcome.approximate).toBe(true);
+    expect(outcome.solutions[0].value).toBeCloseTo(0.739085, 5);
+  });
+
+  it("checks equations with no unknowns", () => {
+    expect(calculate("2+2=4")).toEqual({ kind: "truth", value: true });
+    expect(calculate("2+2=5")).toEqual({ kind: "truth", value: false });
+  });
+
+  it("explains malformed equations", () => {
+    expect(() => calculate("x=1=2")).toThrow(/only one/i);
+    expect(() => calculate("2x=")).toThrow(/both sides/i);
+  });
+
+  it("writes solution sets", () => {
+    const outcome = solve("x^2-5x+6=0");
+    expect(solutionsLatex("x", outcome.solutions, true, false)).toBe("x=2,\\;3");
+    const third = solve("3x=1");
+    expect(solutionsLatex("x", third.solutions, false, false)).toBe("x\\approx0.333333333333");
+    expect(solutionsLatex("x", solve("2x=1").solutions, false, false)).toBe("x=0.5");
+  });
+});
+
+describe("findRoots", () => {
+  it("finds sign changes and ignores poles", () => {
+    expect(findRoots((t) => t * t - 4)).toEqual([-2, 2]);
+    expect(findRoots((t) => Math.tan(t), 4)).toEqual([-3.14159265359, 0, 3.14159265359]);
+  });
+});
+
+describe("tidy exact forms", () => {
+  it("prefers decimals for fractions with big numbers", () => {
+    expect(isTidyExact(evaluate("\\frac{69208015}{99}"))).toBe(false);
   });
 });

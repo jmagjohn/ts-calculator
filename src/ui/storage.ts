@@ -15,6 +15,8 @@ export interface HistoryEntry {
   exact: string;
   /** Plain decimal, when there is one. */
   decimal: string | null;
+  /** Exactly what to show as the result (solutions, True/False). */
+  shown?: string;
 }
 
 export interface SavedEquation {

@@ -7,7 +7,7 @@
  * units, the `Ans` token, friendly errors, and number formatting.
  */
 
-import { ComputeEngine } from "@cortex-js/compute-engine";
+import { ComputeEngine, compile } from "@cortex-js/compute-engine";
 
 export type AngleMode = "deg" | "rad";
 /** auto: fractions/radicals when they are tidy, decimals otherwise. */
@@ -40,11 +40,10 @@ const ANS_PATTERN = /\\(?:mathrm|operatorname|text)\{Ans\}/g;
 
 const engine = new ComputeEngine();
 
-/**
- * Evaluate LaTeX straight from the editor. `ans` is the exact LaTeX of the
- * previous answer and is substituted for the Ans token. Throws CalcError.
- */
-export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: string | null): Evaluation {
+type Boxed = NonNullable<ReturnType<typeof engine.parse>>;
+
+/** Check the editor's LaTeX and substitute Ans. Throws CalcError. */
+function prepare(latex: string, ans?: string | null): string {
   let source = latex.trim();
   if (source === "") {
     throw new CalcError("Nothing to calculate");
@@ -52,6 +51,7 @@ export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: stri
   if (/\\placeholder/.test(source)) {
     throw new CalcError("Fill in the empty box");
   }
+  ANS_PATTERN.lastIndex = 0;
   if (ANS_PATTERN.test(source)) {
     if (!ans) {
       throw new CalcError("No answer yet");
@@ -59,19 +59,22 @@ export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: stri
     source = source.replace(ANS_PATTERN, `\\left(${ans}\\right)`);
   }
   ANS_PATTERN.lastIndex = 0;
+  return source;
+}
 
-  engine.angularUnit = angleMode;
-
+function parse(source: string): Boxed {
   const parsed = engine.parse(source);
-  if (!parsed.isValid) {
+  if (!parsed || !parsed.isValid) {
     throw new CalcError("Syntax error");
   }
+  return parsed;
+}
 
-  const evaluated = parsed.evaluate();
+/** An already-evaluated expression -> exact LaTeX, decimal and value. */
+function describe(evaluated: Boxed): Evaluation {
   if (!evaluated.isValid) {
     throw new CalcError("Math error");
   }
-
   const symbol = typeof evaluated.json === "string" ? evaluated.json : null;
   if (symbol === "ComplexInfinity" || symbol === "Indeterminate" || symbol === "NaN") {
     throw new CalcError("Undefined");
@@ -86,8 +89,7 @@ export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: stri
   const value = Number.isFinite(raw) ? raw : null;
 
   // Complex results: show the numeric approximation, there is no tidy exact form.
-  const isComplex = JSON.stringify(numeric.json).includes("Complex");
-  const exact = cleanLatex(isComplex ? numeric.latex : evaluated.latex);
+  const exact = cleanLatex(isComplex(numeric) ? numeric.latex : evaluated.latex);
 
   return {
     exact,
@@ -96,13 +98,190 @@ export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: stri
   };
 }
 
+function isComplex(expr: Boxed): boolean {
+  return JSON.stringify(expr.json).includes("Complex");
+}
+
+/**
+ * Evaluate LaTeX straight from the editor. `ans` is the exact LaTeX of the
+ * previous answer and is substituted for the Ans token. Throws CalcError.
+ */
+export function evaluate(latex: string, angleMode: AngleMode = "rad", ans?: string | null): Evaluation {
+  engine.angularUnit = angleMode;
+  return describe(parse(prepare(latex, ans)).evaluate());
+}
+
+// -- equations ---------------------------------------------------------------
+
+export type Outcome =
+  | { kind: "value"; result: Evaluation }
+  | {
+      kind: "solutions";
+      variable: string;
+      solutions: Evaluation[];
+      /** Found by numeric search rather than algebra. */
+      approximate: boolean;
+    }
+  | { kind: "truth"; value: boolean };
+
+function unknownsOf(expr: Boxed): string[] {
+  const holder = expr as unknown as { unknowns?: readonly string[]; freeVariables?: readonly string[] };
+  return [...(holder.unknowns ?? holder.freeVariables ?? [])];
+}
+
+/**
+ * What the ENTER key does: evaluate an expression, or, when there is an `=`,
+ * solve for the unknown (x if present) or check the equation is true.
+ */
+export function calculate(latex: string, angleMode: AngleMode = "rad", ans?: string | null): Outcome {
+  engine.angularUnit = angleMode;
+  const source = prepare(latex, ans);
+  const equalSigns = (source.match(/=/g) ?? []).length;
+  if (equalSigns === 0) {
+    return { kind: "value", result: describe(parse(source).evaluate()) };
+  }
+  if (equalSigns > 1) {
+    throw new CalcError("Use only one = sign");
+  }
+  const [left, right] = source.split("=");
+  if (left.trim() === "" || right.trim() === "") {
+    throw new CalcError("Put something on both sides of =");
+  }
+
+  const equation = parse(source);
+  const unknowns = unknownsOf(equation);
+  if (unknowns.length === 0) {
+    const verdict = equation.evaluate().json;
+    return { kind: "truth", value: verdict === "True" };
+  }
+  const variable = unknowns.includes("x") ? "x" : unknowns[0];
+
+  // Algebra first.
+  let roots: Boxed[] | null = null;
+  try {
+    const solved = (equation as unknown as { solve(v: string): Boxed[] | null | undefined }).solve(variable);
+    roots = Array.isArray(solved) ? solved : null;
+  } catch {
+    roots = null;
+  }
+
+  if (roots && roots.length > 0) {
+    const real = roots.filter((root) => !isComplex(root.N()));
+    if (real.length === 0) {
+      throw new CalcError("No real solution");
+    }
+    const solutions = dedupe(real.map((root) => describe(root.evaluate())));
+    solutions.sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
+    return { kind: "solutions", variable, solutions, approximate: false };
+  }
+
+  // Then a numeric search (one unknown only).
+  if (unknowns.length === 1) {
+    const difference = engine.box(["Subtract", parse(left), parse(right)]);
+    const found = findRoots(compileOne(difference, variable));
+    if (found.length > 0) {
+      const solutions = found.map((value) => ({
+        exact: decimalToLatex(formatNumber(value)),
+        decimal: formatNumber(value),
+        value,
+      }));
+      return { kind: "solutions", variable, solutions, approximate: true };
+    }
+  }
+  throw new CalcError(roots ? "No solution" : "Can't solve this one");
+}
+
+function dedupe(solutions: Evaluation[]): Evaluation[] {
+  const seen = new Set<string>();
+  return solutions.filter((solution) => {
+    const key = solution.decimal ?? solution.exact;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function compileOne(expr: Boxed, variable: string): (t: number) => number {
+  const result = compile(expr) as unknown as { run?: (vars: Record<string, number>) => unknown };
+  const run = result.run;
+  if (typeof run !== "function") {
+    throw new CalcError("Can't solve this one");
+  }
+  const vars: Record<string, number> = { [variable]: 0 };
+  return (t) => {
+    vars[variable] = t;
+    const value = run(vars);
+    return typeof value === "number" ? value : Number.NaN;
+  };
+}
+
+/** Real roots of f by sign changes on a grid, refined by bisection. */
+export function findRoots(f: (t: number) => number, limit = 1000): number[] {
+  // Dense near zero, sparser further out.
+  const grid: number[] = [];
+  for (let t = -limit; t <= limit; t += limit < 200 ? 0.01 : 0.05) {
+    grid.push(Math.abs(t) < 1e-12 ? 0 : t);
+  }
+  const roots: number[] = [];
+  let previousT = grid[0];
+  let previous = f(previousT);
+  for (let index = 1; index < grid.length && roots.length < 12; index += 1) {
+    const t = grid[index];
+    const value = f(t);
+    if (value === 0) {
+      roots.push(t);
+    } else if (Number.isFinite(value) && Number.isFinite(previous) && previous !== 0 && value > 0 !== previous > 0) {
+      let lo = previousT;
+      let hi = t;
+      let fLo = previous;
+      for (let step = 0; step < 80; step += 1) {
+        const mid = (lo + hi) / 2;
+        const fMid = f(mid);
+        if (!Number.isFinite(fMid)) {
+          break;
+        }
+        if (fMid > 0 === fLo > 0) {
+          lo = mid;
+          fLo = fMid;
+        } else {
+          hi = mid;
+        }
+      }
+      const root = (lo + hi) / 2;
+      // A sign change across a pole (like tan at 90°) is not a root.
+      const residual = Math.abs(f(root));
+      if (residual < 1e-6 * (1 + Math.abs(previous) + Math.abs(value))) {
+        roots.push(root);
+      }
+    }
+    previousT = t;
+    previous = value;
+  }
+  return roots
+    .map((root) => (Math.abs(root) < 1e-12 ? 0 : Number.parseFloat(root.toPrecision(12))))
+    .filter((root, index, all) => index === 0 || Math.abs(root - all[index - 1]) > 1e-9);
+}
+
+/** LaTeX for a set of solutions, e.g. "x=-3,\\;2" or "x\\approx0.739". */
+export function solutionsLatex(variable: string, solutions: Evaluation[], exact: boolean, approximate: boolean): string {
+  const values = solutions.map((solution) => toLatex(solution, exact)).join(",\\;");
+  // A decimal that filled all 12 significant digits was rounded.
+  const rounded = (solution: Evaluation): boolean =>
+    !exact && solution.decimal !== null && solution.decimal.replace(/[^\d]/g, "").replace(/^0+/, "").length >= 12;
+  const relation = approximate || solutions.some(rounded) ? "\\approx" : "=";
+  return `${variable}${relation}${values}`;
+}
+
 /** Is the exact form something a person would rather read than a decimal? */
 export function isTidyExact(result: Evaluation): boolean {
   if (result.decimal === null) {
     return true;
   }
   const { exact } = result;
-  if (exact.length > 24 || /\d\.\d/.test(exact)) {
+  // Long forms, decimals and big numbers (like 69208015/99) read better as decimals.
+  if (exact.length > 24 || /\d\.\d/.test(exact) || /\d{5,}/.test(exact)) {
     return false;
   }
   // Only fractions, roots and pi. Anything else (unevaluated functions, e^x)

@@ -1,14 +1,15 @@
 /**
  * Keypad as data.
  *
- * Layout (4 columns), modelled on a classic phone scientific calculator:
+ * Layout (5 columns), modelled on a phone scientific calculator, with cursor
+ * keys always on screen and a separate ENTER so `=` can be typed:
  *
- *   top row     2nd  ( )   %   cursor         <- 2nd mode: 2nd  (  )  E
- *   body        a/b   ÷    ×   ⌫              <- 2nd mode: paged scientific panel
- *               7     8    9   −
- *               4     5    6   +
- *               1     2    3   =  (tall)
- *               0 (wide)   .                  <- cursor mode: ◀ 0 . ▶, short =
+ *   top row     2nd  ( )   %    ◀    ▶        <- 2nd mode: 2nd  (  )  ◀  ▶
+ *   body        a/b  xⁿ    √    x    =        <- 2nd mode: paged scientific panel
+ *               7    8     9    ÷    ⌫
+ *               4    5     6    ×    −
+ *               1    2     3    +    ENTER (tall)
+ *               0 (wide)   .    Ans
  */
 
 import type { Selector } from "mathlive";
@@ -24,7 +25,6 @@ export type AfterResult = "fresh" | "chain";
 
 export type AppAction =
   | "second"
-  | "cursor"
   | "equals"
   | "paren"
   | "ans"
@@ -130,6 +130,13 @@ const moveRight: Key = {
 
 // -- layouts ---------------------------------------------------------------
 
+const xKey: Key = {
+  label: "<i>x</i>",
+  aria: "x",
+  action: { type: "insert", latex: "x", after: "fresh" },
+  variant: "fn",
+};
+
 export function topRow(second: boolean): Key[] {
   const secondKey = app("2<sup>nd</sup>", "second", "Second functions", "toggle");
   if (second) {
@@ -137,73 +144,79 @@ export function topRow(second: boolean): Key[] {
       secondKey,
       { ...fn("(", "(", "Open parenthesis"), variant: "op" },
       { ...fn(")", ")", "Close parenthesis", "chain"), variant: "op" },
-      fn("E", `\\times10^{${SLOT}}`, "Times ten to the power", "chain"),
+      moveLeft,
+      moveRight,
     ];
   }
   return [
     secondKey,
     { ...app("( )", "paren", "Parenthesis"), variant: "op" },
     op("%", "\\%", "Percent"),
-    app(ICONS.cursor, "cursor", "Cursor keys", "toggle"),
+    moveLeft,
+    moveRight,
   ];
 }
 
-export function mainBody(cursorMode: boolean): Key[] {
-  const keys: Key[] = [
+export function mainBody(): Key[] {
+  return [
     fn(ICONS.fraction, `\\frac{${SLOT}}{${SLOT}}`, "Fraction"),
-    op("÷", "\\div", "Divide"),
-    op("×", "\\times", "Multiply"),
-    backspace,
+    fn("x<sup>n</sup>", `^{${SLOT}}`, "Power", "chain"),
+    fn("√", `\\sqrt{${SLOT}}`, "Square root"),
+    xKey,
+    { ...op("=", "=", "Equals sign"), action: { type: "insert", latex: "=", after: "fresh" } },
+
     num("7"),
     num("8"),
     num("9"),
-    op("−", "-", "Minus"),
+    op("÷", "\\div", "Divide"),
+    backspace,
+
     num("4"),
     num("5"),
     num("6"),
-    op("+", "+", "Plus"),
+    op("×", "\\times", "Multiply"),
+    op("−", "-", "Minus"),
+
     num("1"),
     num("2"),
     num("3"),
-    { ...app("=", "equals", "Equals", "equals"), rowSpan: cursorMode ? 1 : 2 },
+    op("+", "+", "Plus"),
+    { ...app("ENTER", "equals", "Enter: calculate or solve", "equals"), rowSpan: 2 },
+
+    { ...num("0"), colSpan: 2 },
+    num("."),
+    { ...app("Ans", "ans", "Last answer"), variant: "fn" },
   ];
-  if (cursorMode) {
-    keys.push(moveLeft, num("0"), num("."), moveRight);
-  } else {
-    keys.push({ ...num("0"), colSpan: 2 }, num("."));
-  }
-  return keys;
 }
 
-/** The 2nd panel: pages of 4 x 5 keys, scrolled vertically. */
+/** The 2nd panel: pages of 5 x 4 keys, swiped sideways. */
 export const SCIENCE_PAGES: { title: string; keys: Key[] }[] = [
   {
     title: "Powers & logs",
     keys: [
-      fn("√", `\\sqrt{${SLOT}}`, "Square root"),
       fn("x<sup>2</sup>", "^{2}", "Square", "chain"),
       fn("<sup>n</sup>√", `\\sqrt[${SLOT}]{${SLOT}}`, "Nth root"),
-      fn("x<sup>n</sup>", `^{${SLOT}}`, "Power", "chain"),
-
       fn("x<sup>−1</sup>", "^{-1}", "Reciprocal", "chain"),
       fn("x!", "!", "Factorial", "chain"),
+      fn("E", `\\times10^{${SLOT}}`, "Times ten to the power", "chain"),
+
       fn("<sup>n</sup>C<sub>r</sub>", `\\operatorname{nCr}\\left(${SLOT},${SLOT}\\right)`, "Combinations"),
       fn("<sup>n</sup>P<sub>r</sub>", `\\operatorname{nPr}\\left(${SLOT},${SLOT}\\right)`, "Permutations"),
-
       fn("ln", "\\ln(", "Natural log"),
       fn("e", "e", "Euler's number"),
       fn("e<sup>x</sup>", `e^{${SLOT}}`, "e to the power"),
-      fn("π", "\\pi", "Pi"),
 
       fn("log", "\\log(", "Log base 10"),
       fn("log<sub>2</sub>", "\\log_{2}(", "Log base 2"),
       fn("log<sub>x</sub>", `\\log_{${SLOT}}\\left(${SLOT}\\right)`, "Log base x"),
       fn("10<sup>x</sup>", `10^{${SLOT}}`, "Ten to the power"),
+      fn("π", "\\pi", "Pi"),
 
       fn("1/x", `\\frac{1}{${SLOT}}`, "One over"),
       fn("2<sup>x</sup>", `2^{${SLOT}}`, "Two to the power"),
       fn("|x|", `\\left|${SLOT}\\right|`, "Absolute value"),
-      { ...app("Ans", "ans", "Last answer"), variant: "fn" },
+      fn("∛", `\\sqrt[3]{${SLOT}}`, "Cube root"),
+      fn("<i>y</i>", "y", "y"),
     ],
   },
   {
@@ -212,27 +225,26 @@ export const SCIENCE_PAGES: { title: string; keys: Key[] }[] = [
       fn("sin", "\\sin(", "Sine"),
       fn("cos", "\\cos(", "Cosine"),
       fn("tan", "\\tan(", "Tangent"),
+      fn("°", "\\degree", "Degrees", "chain"),
       { ...app("DEG", "angle", "Switch degrees or radians"), variant: "toggle" },
 
       fn("sin<sup>−1</sup>", "\\arcsin(", "Inverse sine"),
       fn("cos<sup>−1</sup>", "\\arccos(", "Inverse cosine"),
       fn("tan<sup>−1</sup>", "\\arctan(", "Inverse tangent"),
-      fn("°", "\\degree", "Degrees", "chain"),
+      fn("π", "\\pi", "Pi"),
+      fn("x<sup>3</sup>", "^{3}", "Cube", "chain"),
 
       fn("sinh", "\\sinh(", "Hyperbolic sine"),
       fn("cosh", "\\cosh(", "Hyperbolic cosine"),
       fn("tanh", "\\tanh(", "Hyperbolic tangent"),
-      fn("π", "\\pi", "Pi"),
+      fn("sec", "\\sec(", "Secant"),
+      fn("csc", "\\csc(", "Cosecant"),
 
       fn("sinh<sup>−1</sup>", "\\operatorname{arsinh}(", "Inverse hyperbolic sine"),
       fn("cosh<sup>−1</sup>", "\\operatorname{arcosh}(", "Inverse hyperbolic cosine"),
       fn("tanh<sup>−1</sup>", "\\operatorname{artanh}(", "Inverse hyperbolic tangent"),
-      fn("x<sup>3</sup>", "^{3}", "Cube", "chain"),
-
-      fn("sec", "\\sec(", "Secant"),
-      fn("csc", "\\csc(", "Cosecant"),
       fn("cot", "\\cot(", "Cotangent"),
-      fn("∛", `\\sqrt[3]{${SLOT}}`, "Cube root"),
+      fn("e", "e", "Euler's number"),
     ],
   },
 ];
