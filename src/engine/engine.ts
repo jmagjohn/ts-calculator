@@ -59,7 +59,16 @@ function prepare(latex: string, ans?: string | null): string {
     source = source.replace(ANS_PATTERN, `\\left(${ans}\\right)`);
   }
   ANS_PATTERN.lastIndex = 0;
-  return source;
+  return multiplyBeforeFractions(source);
+}
+
+/**
+ * A number written right before a fraction means multiply, not a mixed
+ * number: 2½ is 2 × ½ = 1, not 2.5. compute-engine reads some of these as
+ * mixed numbers, so make the multiplication explicit.
+ */
+export function multiplyBeforeFractions(latex: string): string {
+  return latex.replace(/(\d)\s*(?=\\frac)/g, "$1\\cdot ");
 }
 
 function parse(source: string): Boxed {

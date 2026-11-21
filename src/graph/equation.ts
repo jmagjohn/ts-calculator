@@ -13,6 +13,7 @@
  */
 
 import { ComputeEngine, compile } from "@cortex-js/compute-engine";
+import { multiplyBeforeFractions } from "../engine/engine";
 
 export type Fn1 = (t: number) => number;
 export type Fn2 = (x: number, y: number) => number;
@@ -62,7 +63,7 @@ function checkVars(expr: Boxed, allowed: string[]): string | null {
 }
 
 function prepare(latex: string): ParseResult<Boxed> {
-  const source = latex.trim();
+  const source = multiplyBeforeFractions(latex.trim());
   if (source === "" || /^[xyz]=?$/.test(source)) {
     return { ok: "empty" };
   }

@@ -169,3 +169,12 @@ describe("tidy exact forms", () => {
     expect(isTidyExact(evaluate("\\frac{69208015}{99}"))).toBe(false);
   });
 });
+
+describe("a number before a fraction", () => {
+  it("multiplies instead of making a mixed number", () => {
+    expect(evaluate("2\\frac{1}{2}").decimal).toBe("1");
+    expect(evaluate("6789\\frac12").decimal).toBe("3394.5");
+    expect(evaluate("9887\\frac{8}{99}874+789").decimal).toBe(evaluate("9887\\times\\frac{8}{99}\\times874+789").decimal);
+    expect(evaluate("\\frac{1}{2}").decimal).toBe("0.5");
+  });
+});
